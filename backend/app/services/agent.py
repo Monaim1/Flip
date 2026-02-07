@@ -168,6 +168,7 @@ class AgentService:
         }
 
         all_messages: list = []
+        tool_results: list = []
         step_count = 0
         in_json_block = False
 
@@ -195,6 +196,13 @@ class AgentService:
                     tool_name = event.get("name", "unknown")
                     output = event.get("data", {}).get("output", "")
                     output_str = _extract_text(output) if not isinstance(output, str) else output
+                    if tool_name == "run_query":
+                        try:
+                            parsed = json.loads(output_str)
+                            if isinstance(parsed, list):
+                                tool_results.append(parsed)
+                        except Exception:
+                            pass
                     yield {
                         "event": "step",
                         "data": {
@@ -251,6 +259,8 @@ class AgentService:
                 raise ValueError("Agent returned no messages")
 
             parsed = _parse_agent_result(all_messages, current_chaos)
+            if isinstance(parsed, dict) and tool_results and not parsed.get("toolResults"):
+                parsed["toolResults"] = tool_results
             yield {"event": "result", "data": parsed}
 
         except Exception as exc:

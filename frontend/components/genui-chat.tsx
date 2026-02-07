@@ -37,10 +37,16 @@ export function GenUIChat() {
 
         abortRef.current = new AbortController()
 
+        let gotResult = false
+        let didFallback = false
+
         try {
             const response = await fetch(`${API_URL}/api/query/stream`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: {
+                    "Content-Type": "application/json",
+                    "Accept": "text/event-stream",
+                },
                 body: JSON.stringify({ message: query, currentChaos }),
                 signal: abortRef.current.signal,
             })
@@ -52,36 +58,76 @@ export function GenUIChat() {
             const reader = response.body.getReader()
             const decoder = new TextDecoder()
             let buffer = ""
+            let currentEvent = ""
+            let dataLines: string[] = []
+
+            const dispatchEvent = () => {
+                if (!currentEvent || dataLines.length === 0) {
+                    currentEvent = ""
+                    dataLines = []
+                    return
+                }
+                const dataStr = dataLines.join("\n")
+                try {
+                    const data = JSON.parse(dataStr)
+                    handleSSEEvent(currentEvent, data, query)
+                    if (currentEvent === "result") {
+                        gotResult = true
+                    }
+                } catch {
+                    // skip malformed JSON
+                }
+                currentEvent = ""
+                dataLines = []
+            }
 
             while (true) {
                 const { done, value } = await reader.read()
-                if (done) break
+                if (done) {
+                    break
+                }
 
                 buffer += decoder.decode(value, { stream: true })
                 const lines = buffer.split("\n")
                 buffer = lines.pop() || ""
 
-                let currentEvent = ""
-                for (const line of lines) {
-                    if (line.startsWith("event: ")) {
-                        currentEvent = line.slice(7).trim()
-                    } else if (line.startsWith("data: ") && currentEvent) {
-                        const dataStr = line.slice(6)
-                        try {
-                            const data = JSON.parse(dataStr)
-                            handleSSEEvent(currentEvent, data, query)
-                        } catch {
-                            // skip malformed JSON
-                        }
-                        currentEvent = ""
+                for (const rawLine of lines) {
+                    const line = rawLine.replace(/\r$/, "")
+                    if (line === "") {
+                        dispatchEvent()
+                        continue
+                    }
+                    if (line.startsWith("event:")) {
+                        currentEvent = line.slice(6).trim()
+                    } else if (line.startsWith("data:")) {
+                        dataLines.push(line.slice(5).trimStart())
                     }
                 }
+            }
+
+            if (buffer) {
+                const line = buffer.replace(/\r$/, "")
+                if (line === "") {
+                    dispatchEvent()
+                } else if (line.startsWith("event:")) {
+                    currentEvent = line.slice(6).trim()
+                } else if (line.startsWith("data:")) {
+                    dataLines.push(line.slice(5).trimStart())
+                }
+            }
+            dispatchEvent()
+
+            if (!gotResult) {
+                didFallback = true
+                await handleFallback(query)
             }
         } catch (error) {
             if ((error as Error).name === "AbortError") return
             console.error("Stream error:", error)
             // Fallback to non-streaming endpoint
-            await handleFallback(query)
+            if (!didFallback) {
+                await handleFallback(query)
+            }
         } finally {
             setIsLoading(false)
             setStreamingSteps([])
