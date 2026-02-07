@@ -68,16 +68,28 @@ def _extract_text(content: Any) -> str:
 
 
 def _parse_agent_result(ai_messages: list, current_chaos: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    """Extract and parse the final JSON from agent messages."""
+    """Extract and parse the final JSON from agent messages, including tool results."""
     final_text = ""
-    for msg in reversed(ai_messages):
-        if getattr(msg, "type", "") == "tool":
-            continue
-        raw = getattr(msg, "content", None)
-        text = _extract_text(raw)
-        if text.strip():
-            final_text = text
-            break
+    tool_results = []
+
+    for msg in ai_messages:
+        # Detect tool results from run_query
+        if getattr(msg, "type", "") == "tool" or (hasattr(msg, "tool_calls") and not getattr(msg, "tool_calls", None)):
+            # In LangGraph/LangChain, ToolMessages have the result in .content
+            if getattr(msg, "name", "") == "run_query":
+                try:
+                    res = json.loads(getattr(msg, "content", "[]"))
+                    if isinstance(res, list):
+                        tool_results.append(res)
+                except Exception:
+                    pass
+        
+        # Capture the last assistant message as potential JSON carrier
+        if getattr(msg, "type", "") == "ai":
+            raw = getattr(msg, "content", None)
+            text = _extract_text(raw)
+            if text.strip():
+                final_text = text
 
     if not final_text:
         raise ValueError("Agent did not produce a text response")
@@ -85,12 +97,16 @@ def _parse_agent_result(ai_messages: list, current_chaos: Optional[Dict[str, Any
     logger.debug("Agent raw output: %s", final_text[:500])
 
     try:
-        return parse_json_from_text(final_text)
+        parsed = parse_json_from_text(final_text)
+        # Attach collected tool results for hydration
+        parsed["toolResults"] = tool_results
+        return parsed
     except Exception:
         logger.info("Agent returned non-JSON text; wrapping as conversational response")
         return {
             "intent": "conversation",
             "sqlQueries": [],
+            "toolResults": tool_results,
             "assistantMessage": final_text,
             "dashboardSpec": {"blocks": [], "chaos": current_chaos or {}},
         }

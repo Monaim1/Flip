@@ -28,18 +28,25 @@ def _finalize_spec(agent_result: Dict[str, Any], current_chaos: Any) -> Dict[str
     raw_spec = agent_result.get("dashboardSpec", {}) if isinstance(agent_result, dict) else {}
     normalized_spec_dict = normalize_dashboard_spec(raw_spec)
 
-    # Handle residual QUERY_RESULT_N placeholders (belt-and-suspenders)
+    # Use toolResults from the agent if available (preferred for LangGraph)
+    tool_results = agent_result.get("toolResults", []) if isinstance(agent_result, dict) else []
+    
+    # Fallback/Belt-and-suspenders: Handle residual sqlQueries (old pattern)
     sql_queries: List[str] = agent_result.get("sqlQueries", []) if isinstance(agent_result, dict) else []
     safe_queries = filter_safe_queries(sql_queries)
-    query_results: List[Any] = []
-    if safe_queries:
-        from app.services.db import db_service
-        for sql in safe_queries:
-            try:
-                query_results.append(db_service.query(sql))
-            except Exception:
-                logger.exception("Residual SQL execution failed", extra={"sql": sql})
-                query_results.append([])
+    
+    if tool_results:
+        query_results = tool_results
+    else:
+        query_results = []
+        if safe_queries:
+            from app.services.db import db_service
+            for sql in safe_queries:
+                try:
+                    query_results.append(db_service.query(sql))
+                except Exception:
+                    logger.exception("Residual SQL execution failed", extra={"sql": sql})
+                    query_results.append([])
 
     hydrated_spec = replace_query_placeholders(normalized_spec_dict, query_results)
 

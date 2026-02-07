@@ -36,15 +36,17 @@ def test_placeholder_regex():
     assert not PLACEHOLDER_RE.match("QUERY_RESULT")
     assert not PLACEHOLDER_RE.match("RESULT_0")
 
-def test_parse_json_with_prefix():
-    from app.utils.json_tools import parse_json_from_text
-    text = "Sure, here is your data: { \"intent\": \"test\", \"assistantMessage\": \"hello\" }"
-    parsed = parse_json_from_text(text)
-    assert parsed["intent"] == "test"
-    assert parsed["assistantMessage"] == "hello"
-
-def test_parse_json_with_markdown():
-    from app.utils.json_tools import parse_json_from_text
-    text = "Here it is:\n```json\n{ \"intent\": \"test\" }\n```"
-    parsed = parse_json_from_text(text)
-    assert parsed["intent"] == "test"
+def test_parse_agent_result_extracts_tools():
+    from app.services.agent import _parse_agent_result
+    from langchain_core.messages import AIMessage, ToolMessage
+    
+    messages = [
+        AIMessage(content="Thinking...", tool_calls=[{"name": "run_query", "args": {"sql": "SELECT 1"}, "id": "1"}]),
+        ToolMessage(content="[{\"val\": 100}]", tool_call_id="1", name="run_query"),
+        AIMessage(content="Here is the result: { \"intent\": \"test\", \"assistantMessage\": \"done\", \"dashboardSpec\": { \"blocks\": [] } }")
+    ]
+    
+    parsed = _parse_agent_result(messages, None)
+    assert "toolResults" in parsed
+    assert parsed["toolResults"] == [[{"val": 100}]]
+    assert parsed["assistantMessage"] == "done"
