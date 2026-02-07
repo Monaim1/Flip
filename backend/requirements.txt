@@ -1,7 +1,9 @@
 fastapi
 uvicorn
 duckdb
-anthropic
+openai
 pydantic
 python-dotenv
 pandas
+pytest
+httpx

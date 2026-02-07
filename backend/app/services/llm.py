@@ -4,7 +4,7 @@ import json
 import logging
 from typing import Any, Dict, Optional
 
-from anthropic import Anthropic
+from openai import OpenAI
 
 from app.core.config import settings
 from app.utils.json_tools import parse_json_from_text
@@ -78,19 +78,18 @@ def build_system_prompt(current_chaos: Optional[Dict[str, Any]]) -> str:
 
 class LLMService:
     def __init__(self) -> None:
-        if not settings.anthropic_api_key:
-            logger.warning("ANTHROPIC_API_KEY is not set; LLM calls will fail.")
-        self.client = Anthropic(api_key=settings.anthropic_api_key)
+        if not settings.openai_api_key:
+            logger.warning("OPENAI_API_KEY is not set; LLM calls will fail.")
+        self.client = OpenAI(api_key=settings.openai_api_key)
 
     async def process_query(self, message: str, current_chaos: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        response = self.client.messages.create(
-            model=settings.anthropic_model,
-            max_tokens=4096,
-            system=build_system_prompt(current_chaos),
-            messages=[{"role": "user", "content": message}],
+        response = self.client.responses.create(
+            model=settings.openai_model,
+            instructions=build_system_prompt(current_chaos),
+            input=message,
         )
 
-        content = response.content[0].text if response.content else ""
+        content = response.output_text if hasattr(response, "output_text") else ""
         try:
             return parse_json_from_text(content)
         except Exception:
