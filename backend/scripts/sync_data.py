@@ -8,7 +8,7 @@ import argparse
 
 # Root finance.db path relative to this script (backend/scripts/sync_data.py)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-DB_PATH = os.path.join(BASE_DIR, "finance.db")
+DB_PATH = os.path.join(BASE_DIR, "data", "finance.db")
 
 # Default fixtures from ai-hedge-fund
 DEFAULT_TICKERS = ["AAPL", "MSFT", "TSLA"]

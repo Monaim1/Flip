@@ -4,7 +4,9 @@ import { useState } from "react"
 import { ChatInput } from "@/components/chat/chat-input"
 import { ChatMessage } from "@/components/chat/chat-message"
 import { SuggestedPrompts } from "@/components/chat/suggested-prompts"
-import type { Message, DashboardSpec } from "@/lib/types"
+import type { Message } from "@/lib/types"
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
 
 export function GenUIChat() {
     const [messages, setMessages] = useState<Message[]>([])
@@ -21,7 +23,7 @@ export function GenUIChat() {
         setIsLoading(true)
 
         try {
-            const response = await fetch("http://localhost:8000/api/query", {
+            const response = await fetch(`${API_URL}/api/query`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",

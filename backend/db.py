@@ -2,7 +2,7 @@ import duckdb
 from typing import List, Dict, Any
 
 class DuckDBService:
-    def __init__(self, db_path: str = "../finance.db"):
+    def __init__(self, db_path: str = "../data/finance.db"):
         self.db_path = db_path
 
     def query(self, sql: str) -> List[Dict[str, Any]]:

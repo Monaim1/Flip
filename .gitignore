@@ -15,8 +15,7 @@ __pycache__/
 .pytest_cache/
 
 # database
-finance.db
-*.db
+data/finance.db
 *.db.wal
 .duckdb/
 
@@ -46,3 +45,5 @@ next-env.d.ts
 # OS files
 .DS_Store
 Thumbs.db
+
+references/*
