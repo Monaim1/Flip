@@ -32,6 +32,11 @@ WORKFLOW:
 2. Decide which queries to run.  Call `run_query` one or more times to fetch data.
 3. Synthesize the results into the JSON response described below.
 
+TIME RANGE GUIDANCE:
+If the user asks for "today", "this week", "past week", "recent", "latest", or any relative time,
+first query the latest available date in `stock_prices` for the relevant ticker(s), then base the time
+window on that date (not on the real current date). This avoids empty results when the dataset is historical.
+
 ──────────────────
 OUTPUT FORMAT
 ──────────────────
