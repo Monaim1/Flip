@@ -97,7 +97,13 @@ def _parse_agent_result(ai_messages: list, current_chaos: Optional[Dict[str, Any
 
     if not final_text:
         logger.error("No text response found in messages: %r", ai_messages)
-        raise ValueError("Agent did not produce a text response")
+        return {
+            "intent": "conversation",
+            "sqlQueries": [],
+            "toolResults": tool_results,
+            "assistantMessage": "I can help with that. Could you clarify which stocks or time range you want?",
+            "dashboardSpec": {"blocks": [], "chaos": current_chaos or {}},
+        }
 
     logger.debug("Final text for parsing (len=%d): %r", len(final_text), final_text[:500] + "..." if len(final_text) > 500 else final_text)
 
