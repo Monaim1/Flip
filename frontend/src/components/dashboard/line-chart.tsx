@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface LineChartProps {
 	title: string;
-	data: any[];
+	data: any;
 	xKey: string;
 	yKeys: string[];
 }
@@ -31,7 +31,7 @@ const toNumber = (value: unknown) => {
 	return Number.isFinite(num) ? num : null;
 };
 
-const normalizeLineChartData = (raw: any[], xKey: string, yKeys: string[]) => {
+const normalizeLineChartData = (raw: any, xKey: string, yKeys: string[]) => {
 	const source = Array.isArray(raw) ? raw : Array.isArray(raw?.data) ? raw.data : [];
 	if (!Array.isArray(source) || source.length === 0) {
 		return { data: [], xKey, yKeys };

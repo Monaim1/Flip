@@ -35,17 +35,17 @@ const BlockErrorFallback = ({ errors }: { errors: string[] }) => (
 const renderBlock = (block: Block) => {
 	switch (block.type) {
 		case 'executive-summary':
-			return <ExecutiveSummary {...(block.props as React.ComponentProps<typeof ExecutiveSummary>)} />;
+			return <ExecutiveSummary {...(block.props as any)} />;
 		case 'kpi-card':
-			return <KPICard {...(block.props as React.ComponentProps<typeof KPICard>)} />;
+			return <KPICard {...(block.props as any)} />;
 		case 'line-chart':
-			return <LineChart {...(block.props as React.ComponentProps<typeof LineChart>)} />;
+			return <LineChart {...(block.props as any)} />;
 		case 'candlestick-chart':
-			return <CandlestickChart {...(block.props as React.ComponentProps<typeof CandlestickChart>)} />;
+			return <CandlestickChart {...(block.props as any)} />;
 		case 'event-timeline':
-			return <EventTimeline {...(block.props as React.ComponentProps<typeof EventTimeline>)} />;
+			return <EventTimeline {...(block.props as any)} />;
 		case 'correlation-matrix':
-			return <CorrelationMatrix {...(block.props as React.ComponentProps<typeof CorrelationMatrix>)} />;
+			return <CorrelationMatrix {...(block.props as any)} />;
 		default:
 			return null;
 	}

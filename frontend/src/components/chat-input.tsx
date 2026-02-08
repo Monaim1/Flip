@@ -1,4 +1,4 @@
-import { ArrowUpIcon, MicIcon, MicOffIcon, SquareIcon, Volume2Icon, VolumeXIcon } from 'lucide-react';
+import { ActivityIcon, ArrowUpIcon, MicIcon, MicOffIcon, SquareIcon, Volume2Icon, VolumeXIcon } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useParams } from '@tanstack/react-router';
 import type { FormEvent, KeyboardEvent } from 'react';
@@ -13,7 +13,19 @@ export function ChatInput() {
 	const { isVoiceOutputEnabled, setVoiceOutputEnabled, stopSpeaking } = useVoiceContext();
 	const chatId = useParams({ strict: false, select: (p) => p.chatId });
 	const [input, setInput] = useState('');
-	const { isRecording, isConnecting, transcript, startRecording, stopRecording } = useVoiceInput();
+	const [vadEnabled, setVadEnabled] = useState(false);
+	const { isRecording, isConnecting, transcript, startRecording, stopRecording } = useVoiceInput({
+		vadEnabled,
+		onAutoStop: async (finalText) => {
+			if (finalText.trim()) {
+				setVoiceOutputEnabled(true);
+				await sendMessage({ text: finalText });
+				setInput('');
+			} else {
+				setInput(finalText);
+			}
+		},
+	});
 	const displayValue = useMemo(() => (isRecording ? transcript : input), [input, isRecording, transcript]);
 
 	const handleSubmit = (e: FormEvent) => {
@@ -35,7 +47,7 @@ export function ChatInput() {
 	const handleMicClick = async () => {
 		if (isRunning) return;
 		if (isRecording) {
-			const finalText = await stopRecording();
+			const finalText = await stopRecording('manual');
 			if (finalText.trim()) {
 				setVoiceOutputEnabled(true);
 				await sendMessage({ text: finalText });
@@ -65,6 +77,17 @@ export function ChatInput() {
 						>
 							{isRecording ? <MicOffIcon /> : <MicIcon />}
 							<span className='sr-only'>{isRecording ? 'Stop recording' : 'Start recording'}</span>
+						</InputGroupButton>
+						<InputGroupButton
+							type='button'
+							variant={vadEnabled ? 'default' : 'ghost'}
+							className='rounded-full'
+							size='icon-xs'
+							onClick={() => setVadEnabled(!vadEnabled)}
+							disabled={isRecording}
+						>
+							<ActivityIcon />
+							<span className='sr-only'>{vadEnabled ? 'Disable VAD' : 'Enable VAD'}</span>
 						</InputGroupButton>
 						<InputGroupButton
 							type='button'

@@ -1,6 +1,6 @@
 import { createContext, useContext, useState } from 'react';
 import type { ReactNode } from 'react';
-import type { UserWithRole } from '../../../backend/src/types/project';
+import type { UserWithRole } from '@/types/project';
 
 interface UserPageContextType {
 	userInfo: Partial<UserWithRole>;

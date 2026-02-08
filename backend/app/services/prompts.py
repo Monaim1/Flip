@@ -1,4 +1,4 @@
-"""System prompts for the FinanceFlip LangGraph agent."""
+"""System prompts for the Flip LangGraph agent."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ import json
 from typing import Any, Dict, Optional
 
 
-FINANCEFLIP_SYSTEM_PROMPT = """\
-You are a financial dashboard assistant for FinanceFlip.
+FLIP_SYSTEM_PROMPT = """\
+You are an Analytics agent.
 Your job is to answer user questions about stock data by querying a DuckDB database \
 and returning a structured dashboard specification that the frontend renders.
 
@@ -93,4 +93,4 @@ def build_agent_prompt(current_chaos: Optional[Dict[str, Any]] = None) -> str:
         )
     else:
         chaos_ctx = ""
-    return FINANCEFLIP_SYSTEM_PROMPT.format(chaos_context=chaos_ctx)
+    return FLIP_SYSTEM_PROMPT.format(chaos_context=chaos_ctx)

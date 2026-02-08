@@ -1,4 +1,4 @@
-"""LangChain tools for the FinanceFlip agent.
+"""LangChain tools for the Flip agent.
 
 These tools let the LangGraph agent query the DuckDB warehouse
 while respecting the existing SQL safety guardrails.
@@ -38,7 +38,7 @@ DB_SCHEMA = {
 
 @tool
 def run_query(sql: str) -> str:
-    """Execute a read-only SQL query against the FinanceFlip DuckDB database.
+    """Execute a read-only SQL query against the Flip DuckDB database.
 
     Only SELECT queries are allowed.  Tables: stock_prices, financial_metrics, news.
     Returns results as a JSON array of objects (max 200 rows).

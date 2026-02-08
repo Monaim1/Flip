@@ -1,9 +1,9 @@
-# FinanceFlip (Clean)
+# Flip (Clean)
 
 This repo is now a single FastAPI backend and a single frontend UI.
 
 **Kept**
-- `backend/` — FastAPI (FinanceFlip)
+- `backend/` — FastAPI (Flip)
 - `data/finance.db` — local DuckDB data
 - `frontend/` — UI wired to FastAPI
 

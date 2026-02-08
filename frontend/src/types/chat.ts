@@ -8,6 +8,7 @@ export type UIMessage = {
 	id: string;
 	role: 'user' | 'assistant';
 	parts: UIMessagePart[];
+	reasoning?: string;
 };
 
 export type ChatListItem = {

@@ -240,13 +240,13 @@ const AssistantMessageBlock = ({
 						return null;
 					}
 					return (
-						<Streamdown key={i} isAnimating={false} mode='static' cdnUrl={null}>
+						<Streamdown key={i} isAnimating={false} mode='static'>
 							{assistantText}
 						</Streamdown>
 					);
 				}
 				return (
-					<Streamdown key={i} isAnimating={isPartStreaming} mode={isPartStreaming ? 'streaming' : 'static'} cdnUrl={null}>
+					<Streamdown key={i} isAnimating={isPartStreaming} mode={isPartStreaming ? 'streaming' : 'static'}>
 						{p.text}
 					</Streamdown>
 				);

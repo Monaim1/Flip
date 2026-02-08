@@ -43,6 +43,7 @@ npm run check
 This UI supports:
 - Speech-to-text (mic button)
 - Text-to-speech (speaker toggle)
+- VAD mode (auto-stop on silence)
 
 Voice uses backend proxy endpoints:
 - `WS /api/voice/stt`

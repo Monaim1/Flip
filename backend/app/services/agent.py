@@ -1,4 +1,4 @@
-"""LangGraph agent service for FinanceFlip.
+"""LangGraph agent service for Flip.
 
 Uses Gemini (via langchain-google-genai) as the LLM inside a LangGraph
 ReAct agent with DuckDB tools.  Replaces the old single-shot LLMService.
@@ -33,7 +33,7 @@ def _build_llm() -> ChatGoogleGenerativeAI:
 
 
 def _build_graph():
-    """Build a LangGraph ReAct agent wired to Gemini + FinanceFlip tools."""
+    """Build a LangGraph ReAct agent wired to Gemini + Flip tools."""
     llm = _build_llm()
     tools = get_all_tools()
     return create_react_agent(llm, tools).with_config({"recursion_limit": 50})

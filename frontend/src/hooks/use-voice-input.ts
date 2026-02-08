@@ -1,9 +1,13 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { WS_URL } from '@/lib/api';
 
 type VoiceInputOptions = {
 	onTranscript?: (text: string) => void;
 	onFinalTranscript?: (text: string) => void;
+	onAutoStop?: (text: string) => void;
+	vadEnabled?: boolean;
+	vadSilenceMs?: number;
+	vadThreshold?: number;
 };
 
 type VoiceInputState = {
@@ -12,11 +16,13 @@ type VoiceInputState = {
 	transcript: string;
 	error?: Error;
 	startRecording: () => Promise<void>;
-	stopRecording: () => Promise<string>;
+	stopRecording: (reason?: 'manual' | 'vad') => Promise<string>;
 };
 
 const TARGET_SAMPLE_RATE = 24000;
 const PROCESSOR_BUFFER_SIZE = 4096;
+const DEFAULT_VAD_SILENCE_MS = 900;
+const DEFAULT_VAD_THRESHOLD = 0.012;
 
 const downsampleBuffer = (buffer: Float32Array, inputSampleRate: number, outputSampleRate: number) => {
 	if (outputSampleRate === inputSampleRate) {
@@ -51,7 +57,14 @@ const floatTo16BitPCM = (input: Float32Array) => {
 	return output;
 };
 
-export const useVoiceInput = ({ onTranscript, onFinalTranscript }: VoiceInputOptions = {}): VoiceInputState => {
+export const useVoiceInput = ({
+	onTranscript,
+	onFinalTranscript,
+	onAutoStop,
+	vadEnabled = false,
+	vadSilenceMs = DEFAULT_VAD_SILENCE_MS,
+	vadThreshold = DEFAULT_VAD_THRESHOLD,
+}: VoiceInputOptions = {}): VoiceInputState => {
 	const [isRecording, setIsRecording] = useState(false);
 	const [isConnecting, setIsConnecting] = useState(false);
 	const [transcript, setTranscript] = useState('');
@@ -64,6 +77,42 @@ export const useVoiceInput = ({ onTranscript, onFinalTranscript }: VoiceInputOpt
 	const transcriptRef = useRef('');
 	const finalizeRef = useRef<((text: string) => void) | null>(null);
 	const socketReadyRef = useRef(false);
+	const isRecordingRef = useRef(false);
+	const vadEnabledRef = useRef(vadEnabled);
+	const vadSilenceMsRef = useRef(vadSilenceMs);
+	const vadThresholdRef = useRef(vadThreshold);
+	const lastVoiceAtRef = useRef(0);
+	const hasVoiceRef = useRef(false);
+	const vadIntervalRef = useRef<number | null>(null);
+	const stoppingRef = useRef(false);
+
+	const clearVadInterval = useCallback(() => {
+		if (vadIntervalRef.current) {
+			window.clearInterval(vadIntervalRef.current);
+			vadIntervalRef.current = null;
+		}
+	}, []);
+
+	const startVadInterval = useCallback(
+		(triggerStop: () => void) => {
+			clearVadInterval();
+			vadIntervalRef.current = window.setInterval(() => {
+				if (!isRecordingRef.current || !vadEnabledRef.current) return;
+				if (!hasVoiceRef.current) return;
+				const silenceFor = Date.now() - lastVoiceAtRef.current;
+				if (silenceFor >= vadSilenceMsRef.current) {
+					triggerStop();
+				}
+			}, 150);
+		},
+		[clearVadInterval],
+	);
+
+	useEffect(() => {
+		vadEnabledRef.current = vadEnabled;
+		vadSilenceMsRef.current = vadSilenceMs;
+		vadThresholdRef.current = vadThreshold;
+	}, [vadEnabled, vadSilenceMs, vadThreshold]);
 
 	const mergeTranscript = useCallback((prev: string, nextText: string) => {
 		const cleaned = nextText.trim();
@@ -98,7 +147,48 @@ export const useVoiceInput = ({ onTranscript, onFinalTranscript }: VoiceInputOpt
 			streamRef.current.getTracks().forEach((track) => track.stop());
 			streamRef.current = null;
 		}
+		clearVadInterval();
 	}, []);
+
+	const stopRecording = useCallback(
+		async (reason: 'manual' | 'vad' = 'manual') => {
+			if (stoppingRef.current) {
+				return transcriptRef.current.trim();
+			}
+			stoppingRef.current = true;
+			setIsRecording(false);
+			setIsConnecting(false);
+			isRecordingRef.current = false;
+			socketReadyRef.current = false;
+			clearVadInterval();
+			await cleanupAudio();
+
+			const ws = wsRef.current;
+			if (ws && ws.readyState === WebSocket.OPEN) {
+				ws.send(JSON.stringify({ type: 'end_of_stream' }));
+			}
+
+			const finalizePromise = new Promise<string>((resolve) => {
+				finalizeRef.current = (text) => resolve(text);
+				setTimeout(() => resolve(transcriptRef.current.trim()), 1500);
+			});
+
+			try {
+				const finalText = await finalizePromise;
+				if (reason === 'vad') {
+					onAutoStop?.(finalText);
+				}
+				return finalText;
+			} finally {
+				if (ws && ws.readyState === WebSocket.OPEN) {
+					ws.close();
+				}
+				wsRef.current = null;
+				stoppingRef.current = false;
+			}
+		},
+		[clearVadInterval, cleanupAudio, onAutoStop],
+	);
 
 	const startRecording = useCallback(async () => {
 		if (isRecording || isConnecting) return;
@@ -106,6 +196,8 @@ export const useVoiceInput = ({ onTranscript, onFinalTranscript }: VoiceInputOpt
 		setTranscript('');
 		transcriptRef.current = '';
 		setIsConnecting(true);
+		hasVoiceRef.current = false;
+		lastVoiceAtRef.current = Date.now();
 
 		try {
 			const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -126,6 +218,15 @@ export const useVoiceInput = ({ onTranscript, onFinalTranscript }: VoiceInputOpt
 					return;
 				}
 				const input = event.inputBuffer.getChannelData(0);
+				let sumSquares = 0;
+				for (let i = 0; i < input.length; i++) {
+					sumSquares += input[i] * input[i];
+				}
+				const rms = Math.sqrt(sumSquares / input.length);
+				if (rms > vadThresholdRef.current) {
+					lastVoiceAtRef.current = Date.now();
+					hasVoiceRef.current = true;
+				}
 				const downsampled = downsampleBuffer(input, audioContext.sampleRate, TARGET_SAMPLE_RATE);
 				const pcm16 = floatTo16BitPCM(downsampled);
 				wsRef.current.send(pcm16.buffer);
@@ -143,6 +244,14 @@ export const useVoiceInput = ({ onTranscript, onFinalTranscript }: VoiceInputOpt
 				socketReadyRef.current = true;
 				setIsRecording(true);
 				setIsConnecting(false);
+				isRecordingRef.current = true;
+				if (vadEnabledRef.current) {
+					startVadInterval(() => {
+						if (!stoppingRef.current) {
+							void stopRecording('vad');
+						}
+					});
+				}
 			};
 
 			ws.onmessage = (event) => {
@@ -175,41 +284,17 @@ export const useVoiceInput = ({ onTranscript, onFinalTranscript }: VoiceInputOpt
 				socketReadyRef.current = false;
 				setIsRecording(false);
 				setIsConnecting(false);
+				isRecordingRef.current = false;
 				void cleanupAudio();
 			};
 		} catch (err) {
 			setError(err as Error);
 			setIsConnecting(false);
 			setIsRecording(false);
+			isRecordingRef.current = false;
 			await cleanupAudio();
 		}
-	}, [cleanupAudio, isConnecting, isRecording, onFinalTranscript, onTranscript, updateTranscript]);
-
-	const stopRecording = useCallback(async () => {
-		setIsRecording(false);
-		setIsConnecting(false);
-		socketReadyRef.current = false;
-		await cleanupAudio();
-
-		const ws = wsRef.current;
-		if (ws && ws.readyState === WebSocket.OPEN) {
-			ws.send(JSON.stringify({ type: 'end_of_stream' }));
-		}
-
-		const finalizePromise = new Promise<string>((resolve) => {
-			finalizeRef.current = (text) => resolve(text);
-			setTimeout(() => resolve(transcriptRef.current.trim()), 1500);
-		});
-
-		try {
-			return await finalizePromise;
-		} finally {
-			if (ws && ws.readyState === WebSocket.OPEN) {
-				ws.close();
-			}
-			wsRef.current = null;
-		}
-	}, [cleanupAudio]);
+	}, [cleanupAudio, isConnecting, isRecording, onFinalTranscript, onTranscript, startVadInterval, stopRecording, updateTranscript]);
 
 	return useMemo(
 		() => ({
