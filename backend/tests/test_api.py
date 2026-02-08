@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.services import llm as llm_module
+from app.services import agent as agent_module
 from app.services import db as db_module
 
 
@@ -29,7 +29,7 @@ def test_query_endpoint_hydrates_results_and_carries_chaos(monkeypatch):
     def fake_query(sql, params=None):
         return [{"date": "2024-01-01", "AAPL": 100}]
 
-    monkeypatch.setattr(llm_module.llm_service, "process_query", fake_process_query)
+    monkeypatch.setattr(agent_module.agent_service, "process_query", fake_process_query)
     monkeypatch.setattr(db_module.db_service, "query", fake_query)
 
     client = TestClient(app)

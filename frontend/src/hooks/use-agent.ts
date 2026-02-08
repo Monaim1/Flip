@@ -3,8 +3,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import type { UIMessage } from '@/types/chat';
 import type { ScrollToBottom, ScrollToBottomOptions } from 'use-stick-to-bottom';
 import type { ChaosState } from '@/types/genui';
-
-const API_URL = import.meta.env.VITE_FASTAPI_URL || 'http://localhost:8000';
+import { API_URL } from '@/lib/api';
 
 const DEFAULT_CHAOS: ChaosState = {
 	rotation: 0,
