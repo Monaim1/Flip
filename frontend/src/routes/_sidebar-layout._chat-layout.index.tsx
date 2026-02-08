@@ -1,5 +1,4 @@
 import { createFileRoute } from '@tanstack/react-router';
-import NaoLogoGreyscale from '@/components/icons/nao-logo-greyscale.svg';
 import { useSession } from '@/lib/auth-client';
 import { capitalize } from '@/lib/utils';
 import { ChatMessages } from '@/components/chat-messages';
@@ -18,7 +17,7 @@ function RouteComponent() {
 		return (
 			<div className='flex flex-col items-center justify-end gap-4 p-4 mb-8 max-w-5xl mx-auto w-full'>
 				<div className='relative w-full flex items-center justify-center px-6'>
-					<NaoLogoGreyscale className='w-[150px] h-auto select-none opacity-[0.05]' />
+					<img src='/logo.svg' alt='Logo' className='w-[150px] h-auto select-none opacity-[0.05]' />
 				</div>
 
 				<div className='text-2xl md:text-2xl tracking-tight text-muted-foreground text-center px-6'>

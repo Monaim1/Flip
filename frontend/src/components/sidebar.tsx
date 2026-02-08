@@ -5,7 +5,6 @@ import { useNavigate } from '@tanstack/react-router';
 import { Button } from '@/components/ui/button';
 import { cn, hideIf } from '@/lib/utils';
 import { useSidebar } from '@/contexts/sidebar.provider';
-import NaoLogoGreyscale from '@/components/icons/nao-logo-greyscale.svg';
 
 export function Sidebar() {
 	const navigate = useNavigate();
@@ -43,7 +42,7 @@ export function Sidebar() {
 							hideIf(isCollapsed),
 						)}
 					>
-						<NaoLogoGreyscale className='size-5' />
+						<img src='/logo.svg' alt='Logo' className='size-5' />
 					</div>
 
 					<Button
