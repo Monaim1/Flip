@@ -1,9 +1,10 @@
 import type { Dispatch, SetStateAction } from 'react';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { UIMessage } from '@/types/chat';
 import type { ScrollToBottom, ScrollToBottomOptions } from 'use-stick-to-bottom';
 import type { ChaosState } from '@/types/genui';
 import { API_URL } from '@/lib/api';
+import { useSession } from '@/lib/auth-client';
 
 const DEFAULT_CHAOS: ChaosState = {
 	rotation: 0,
@@ -38,15 +39,75 @@ const createAssistantMessage = (): UIMessage => ({
 });
 
 export const useAgent = (): AgentHelpers => {
+	const session = useSession();
+	const userId = session?.data?.user?.id ?? 'local';
 	const [messages, setMessages] = useState<UIMessage[]>([]);
 	const [status, setStatus] = useState<'idle' | 'streaming'>('idle');
 	const [error, setError] = useState<Error | undefined>(undefined);
-	const [currentChaos, setCurrentChaos] = useState<ChaosState>(DEFAULT_CHAOS);
+	const [currentChaos, setCurrentChaos] = useState<ChaosState>(() => {
+		if (typeof window === 'undefined') return DEFAULT_CHAOS;
+		try {
+			const saved = localStorage.getItem('currentChaos');
+			if (saved) {
+				const parsed = JSON.parse(saved) as ChaosState;
+				if (parsed && typeof parsed === 'object') {
+					return { ...DEFAULT_CHAOS, ...parsed };
+				}
+			}
+		} catch {
+			// ignore
+		}
+		return DEFAULT_CHAOS;
+	});
+	const [hasLoadedChaos, setHasLoadedChaos] = useState(false);
 	const abortRef = useRef<AbortController | null>(null);
 	const streamedTextRef = useRef<Record<string, string>>({});
 	const scrollDownService = useScrollDownCallbackService();
 
 	const clearError = useCallback(() => setError(undefined), []);
+
+	useEffect(() => {
+		if (!userId) return;
+		setHasLoadedChaos(false);
+		let isActive = true;
+		const loadChaos = async () => {
+			try {
+				const response = await fetch(`${API_URL}/api/chaos?userId=${encodeURIComponent(userId)}`);
+				if (!response.ok) return;
+				const data = await response.json();
+				const chaos = data?.chaos;
+				if (isActive && chaos && typeof chaos === 'object' && Object.keys(chaos).length > 0) {
+					setCurrentChaos((prev) => ({ ...prev, ...chaos }));
+				}
+			} catch {
+				// ignore
+			} finally {
+				if (isActive) {
+					setHasLoadedChaos(true);
+				}
+			}
+		};
+		loadChaos();
+		return () => {
+			isActive = false;
+		};
+	}, [userId]);
+
+	useEffect(() => {
+		if (!userId || !hasLoadedChaos) return;
+		if (typeof window !== 'undefined') {
+			try {
+				localStorage.setItem('currentChaos', JSON.stringify(currentChaos));
+			} catch {
+				// ignore
+			}
+		}
+		fetch(`${API_URL}/api/chaos`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ userId, chaos: currentChaos }),
+		}).catch(() => undefined);
+	}, [currentChaos, userId]);
 
 	const updateAssistantText = useCallback((messageId: string, text: string, isStreaming: boolean) => {
 		setMessages((prev) =>
@@ -81,7 +142,7 @@ export const useAgent = (): AgentHelpers => {
 				const response = await fetch(`${API_URL}/api/query`, {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ message: text, currentChaos }),
+					body: JSON.stringify({ message: text, currentChaos, userId }),
 				});
 				if (!response.ok) {
 					throw new Error(`Fallback failed: ${response.status}`);
@@ -105,7 +166,7 @@ export const useAgent = (): AgentHelpers => {
 						'Content-Type': 'application/json',
 						Accept: 'text/event-stream',
 					},
-					body: JSON.stringify({ message: text, currentChaos }),
+					body: JSON.stringify({ message: text, currentChaos, userId }),
 					signal: abortRef.current.signal,
 				});
 
@@ -220,7 +281,7 @@ export const useAgent = (): AgentHelpers => {
 				delete streamedTextRef.current[assistantId];
 			}
 		},
-		[clearError, currentChaos, scrollDownService, status, updateAssistantText],
+		[clearError, currentChaos, scrollDownService, status, updateAssistantText, userId],
 	);
 
 	const stopAgent = useCallback(async () => {

@@ -84,10 +84,11 @@ CHAOS COMMANDS
 ──────────────────
 If the user says any of these, update the chaos object accordingly:
 • "flip" / "upside down" → rotation: 180
-• "comic sans"          → fontFamily: "Comic Sans MS"
+• "comic sans"          → fontFamily: "Comic Sans MS, Comic Sans, cursive"
 • "wobble"              → animation: "wobble"
 • "rainbow"             → animation: "rainbow"
 • "matrix mode"         → theme: "matrix"
+• "kase mode"           → rotation: 180, fontFamily: "Comic Sans MS, Comic Sans, cursive"
 • "professional mode"   → reset all chaos to defaults
 
 {chaos_context}

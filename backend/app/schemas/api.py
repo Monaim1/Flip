@@ -25,6 +25,7 @@ class DashboardSpec(BaseModel):
 class QueryRequest(BaseModel):
     message: str
     currentChaos: Optional[Dict[str, Any]] = None
+    userId: Optional[str] = None
 
 
 class QueryResponse(BaseModel):
@@ -32,6 +33,16 @@ class QueryResponse(BaseModel):
     assistantMessage: str
     intent: str
     queryMetadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class ChaosPreferenceRequest(BaseModel):
+    userId: str
+    chaos: Dict[str, Any]
+
+
+class ChaosPreferenceResponse(BaseModel):
+    userId: str
+    chaos: Dict[str, Any]
 
 
 class TTSRequest(BaseModel):

@@ -13,9 +13,17 @@ import httpx
 import websockets
 
 from app.core.config import settings
-from app.schemas.api import QueryRequest, QueryResponse, DashboardSpec, TTSRequest
+from app.schemas.api import (
+    QueryRequest,
+    QueryResponse,
+    DashboardSpec,
+    TTSRequest,
+    ChaosPreferenceRequest,
+    ChaosPreferenceResponse,
+)
 from app.services.db import db_service
 from app.services.agent import agent_service
+from app.services.chaos_state import get_chaos_state, set_chaos_state
 from app.utils.json_tools import normalize_dashboard_spec, replace_query_placeholders
 from app.utils.sql_guard import filter_safe_queries
 
@@ -167,20 +175,29 @@ def _hydrate_missing_time_series(hydrated_spec: Dict[str, Any]) -> Dict[str, Any
 async def handle_query(request: QueryRequest) -> QueryResponse:
     start_time = time.time()
 
+    user_id = request.userId or ""
+    current_chaos = request.currentChaos
+    if not current_chaos and user_id:
+        current_chaos = get_chaos_state(user_id)
+
     try:
         agent_result = await agent_service.process_query(
-            request.message, request.currentChaos
+            request.message, current_chaos
         )
     except Exception as exc:
         logger.exception("Agent processing failed")
         raise HTTPException(status_code=502, detail="Agent processing failed") from exc
 
-    hydrated_spec, sql_queries, safe_queries = _finalize_spec(agent_result, request.currentChaos)
+    hydrated_spec, sql_queries, safe_queries = _finalize_spec(agent_result, current_chaos)
 
     intent = agent_result.get("intent", "unknown") if isinstance(agent_result, dict) else "unknown"
     assistant_message = agent_result.get("assistantMessage", "") if isinstance(agent_result, dict) else ""
     hydrated_spec = _maybe_strip_blocks(hydrated_spec, intent, sql_queries, safe_queries)
     hydrated_spec = _hydrate_missing_time_series(hydrated_spec)
+    if user_id:
+        chaos = hydrated_spec.get("chaos")
+        if isinstance(chaos, dict):
+            set_chaos_state(user_id, chaos)
 
     elapsed_ms = int((time.time() - start_time) * 1000)
     return QueryResponse(
@@ -208,12 +225,16 @@ async def handle_query_stream(request: QueryRequest) -> StreamingResponse:
       event: done    — stream finished
     """
     start_time = time.time()
+    user_id = request.userId or ""
+    current_chaos = request.currentChaos
+    if not current_chaos and user_id:
+        current_chaos = get_chaos_state(user_id)
 
     async def event_generator():
         streamed_content = False
         try:
             async for sse_event in agent_service.process_query_stream(
-                request.message, request.currentChaos
+                request.message, current_chaos
             ):
                 event_type = sse_event["event"]
                 data = sse_event["data"]
@@ -221,11 +242,15 @@ async def handle_query_stream(request: QueryRequest) -> StreamingResponse:
                 if event_type == "result":
                     # Finalize the spec the same way as the non-streaming path
                     hydrated_spec, sql_queries, safe_queries = _finalize_spec(
-                        data, request.currentChaos
+                        data, current_chaos
                     )
                     intent = data.get("intent", "unknown") if isinstance(data, dict) else "unknown"
                     hydrated_spec = _maybe_strip_blocks(hydrated_spec, intent, sql_queries, safe_queries)
                     hydrated_spec = _hydrate_missing_time_series(hydrated_spec)
+                    if user_id:
+                        chaos = hydrated_spec.get("chaos")
+                        if isinstance(chaos, dict):
+                            set_chaos_state(user_id, chaos)
                     elapsed_ms = int((time.time() - start_time) * 1000)
                     final = {
                         "dashboardSpec": DashboardSpec.model_validate(hydrated_spec).model_dump(),
@@ -267,6 +292,18 @@ async def handle_query_stream(request: QueryRequest) -> StreamingResponse:
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@router.get("/api/chaos", response_model=ChaosPreferenceResponse)
+def get_chaos(userId: str) -> ChaosPreferenceResponse:
+    chaos = get_chaos_state(userId) or {}
+    return ChaosPreferenceResponse(userId=userId, chaos=chaos)
+
+
+@router.post("/api/chaos", response_model=ChaosPreferenceResponse)
+def set_chaos(request: ChaosPreferenceRequest) -> ChaosPreferenceResponse:
+    set_chaos_state(request.userId, request.chaos)
+    return ChaosPreferenceResponse(userId=request.userId, chaos=request.chaos)
 
 
 # ── Voice (Gradium proxy) ──
