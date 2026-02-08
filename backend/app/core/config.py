@@ -32,6 +32,12 @@ class Settings:
             if origin.strip()
         ]
     )
+    gradium_api_key: str = os.getenv("GRADIUM_API_KEY", "")
+    gradium_region: str = os.getenv("GRADIUM_REGION", "eu")
+    gradium_stt_model: str = os.getenv("GRADIUM_STT_MODEL", "default")
+    gradium_tts_model: str = os.getenv("GRADIUM_TTS_MODEL", "default")
+    gradium_tts_voice_id: str = os.getenv("GRADIUM_TTS_VOICE_ID", "b35yykvVppLXyw_l")
+    gradium_tts_output_format: str = os.getenv("GRADIUM_TTS_OUTPUT_FORMAT", "wav")
 
 
 settings = Settings()

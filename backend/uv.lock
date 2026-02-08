@@ -59,6 +59,7 @@ dependencies = [
     { name = "python-dotenv" },
     { name = "requests" },
     { name = "uvicorn" },
+    { name = "websockets" },
 ]
 
 [package.metadata]
@@ -76,6 +77,7 @@ requires-dist = [
     { name = "python-dotenv", specifier = ">=1.2.1" },
     { name = "requests", specifier = ">=2.32.5" },
     { name = "uvicorn", specifier = ">=0.40.0" },
+    { name = "websockets", specifier = ">=12.0" },
 ]
 
 [[package]]

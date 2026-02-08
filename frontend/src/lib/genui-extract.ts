@@ -64,9 +64,12 @@ export const extractDashboardSpecFromText = (raw: string): ExtractedDashboard | 
 	const normalized = normalizeDashboardSpec(specCandidate);
 	if (!normalized) return null;
 
+	const extractedAssistant =
+		typeof found.obj.assistantMessage === 'string' ? found.obj.assistantMessage : '';
+	const trimmedAssistant = extractedAssistant.trim();
 	const assistantMessage =
-		typeof found.obj.assistantMessage === 'string'
-			? found.obj.assistantMessage
+		trimmedAssistant.length > 0
+			? extractedAssistant
 			: raw.slice(0, found.start).trim() || raw.slice(found.end + 1).trim();
 
 	return { spec: normalized, assistantText: assistantMessage };

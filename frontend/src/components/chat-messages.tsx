@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/conversation';
 import { cn, isLast } from '@/lib/utils';
 import { useAgentContext } from '@/contexts/agent.provider';
+import { useVoiceContext } from '@/contexts/voice.provider';
 import { useHeight } from '@/hooks/use-height';
 import { groupMessages } from '@/lib/messages.utils';
 import { useDebounce } from '@/hooks/use-debounce';
@@ -27,11 +28,14 @@ export function ChatMessages() {
 	const containerHeight = useHeight(contentRef, []);
 	const { messages, status } = useAgentContext();
 	const isAgentGenerating = status === 'streaming';
+	const { isVoiceOutputEnabled, speak } = useVoiceContext();
 	const lastMessageRole = messages.at(-1)?.role;
 	const shouldResizeSmoothly = !isAgentGenerating && lastMessageRole === 'user';
 
 	// Skip fade-in animation when navigating from home after sending a message
 	const fromMessageSend = useRouterState({ select: (state) => state.location.state.fromMessageSend });
+
+	useSpeakOnAssistantReply(messages, isVoiceOutputEnabled, speak);
 
 	return (
 		<div
@@ -49,6 +53,47 @@ export function ChatMessages() {
 		</div>
 	);
 }
+
+const getAssistantText = (message: UIMessage) => {
+	const textContent = message.parts
+		.filter((p) => p.type === 'text')
+		.map((p) => p.text)
+		.join('\n');
+	const extracted = extractDashboardSpecFromText(textContent);
+	return (extracted?.assistantText ?? textContent).trim();
+};
+
+const isMessageStreaming = (message: UIMessage) =>
+	message.parts.some((p) => 'state' in p && (p as { state?: string }).state === 'streaming');
+
+const useSpeakOnAssistantReply = (messages: UIMessage[], enabled: boolean, speak: (text: string) => Promise<void>) => {
+	const spokenMessageIds = useRef<Set<string>>(new Set());
+	const prevEnabledRef = useRef(enabled);
+
+	useEffect(() => {
+		if (enabled && !prevEnabledRef.current) {
+			const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant');
+			if (lastAssistant) {
+				spokenMessageIds.current.add(lastAssistant.id);
+			}
+		}
+		prevEnabledRef.current = enabled;
+	}, [enabled, messages]);
+
+	useEffect(() => {
+		if (!enabled) return;
+		const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant');
+		if (!lastAssistant) return;
+		if (isMessageStreaming(lastAssistant)) return;
+		if (spokenMessageIds.current.has(lastAssistant.id)) return;
+
+		const assistantText = getAssistantText(lastAssistant);
+		if (!assistantText) return;
+
+		spokenMessageIds.current.add(lastAssistant.id);
+		void speak(assistantText);
+	}, [enabled, messages, speak]);
+};
 
 const ChatMessagesContent = ({ isAgentGenerating }: { isAgentGenerating: boolean }) => {
 	const { messages, isRunning, registerScrollDown } = useAgentContext();

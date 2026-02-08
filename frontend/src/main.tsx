@@ -8,6 +8,7 @@ import { SidebarProvider } from './contexts/sidebar.provider';
 import { routeTree } from './routeTree.gen';
 import reportWebVitals from './reportWebVitals';
 import { UserPageProvider } from './contexts/user.provider';
+import { VoiceProvider } from './contexts/voice.provider';
 
 // Register the router instance for type safety
 declare module '@tanstack/react-router' {
@@ -39,7 +40,9 @@ if (!rootElement.innerHTML) {
 				<SidebarProvider>
 					<PostHogProvider>
 						<UserPageProvider>
-							<RouterProvider router={router} />
+							<VoiceProvider>
+								<RouterProvider router={router} />
+							</VoiceProvider>
 						</UserPageProvider>
 					</PostHogProvider>
 				</SidebarProvider>

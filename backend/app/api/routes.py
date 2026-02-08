@@ -1,14 +1,19 @@
 from __future__ import annotations
 
+import asyncio
+import base64
 import json
 import logging
 import time
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
+import httpx
+import websockets
 
-from app.schemas.api import QueryRequest, QueryResponse, DashboardSpec
+from app.core.config import settings
+from app.schemas.api import QueryRequest, QueryResponse, DashboardSpec, TTSRequest
 from app.services.agent import agent_service
 from app.utils.json_tools import normalize_dashboard_spec, replace_query_placeholders
 from app.utils.sql_guard import filter_safe_queries
@@ -183,3 +188,108 @@ async def handle_query_stream(request: QueryRequest) -> StreamingResponse:
             "X-Accel-Buffering": "no",
         },
     )
+
+
+# ── Voice (Gradium proxy) ──
+
+
+def _gradium_ws_url(kind: str) -> str:
+    region = settings.gradium_region or "eu"
+    if kind == "stt":
+        return f"wss://{region}.api.gradium.ai/api/speech/asr"
+    return f"wss://{region}.api.gradium.ai/api/speech/tts"
+
+
+def _gradium_http_tts_url() -> str:
+    region = settings.gradium_region or "eu"
+    return f"https://{region}.api.gradium.ai/api/post/speech/tts"
+
+
+@router.websocket("/api/voice/stt")
+async def voice_stt_websocket(client_ws: WebSocket) -> None:
+    if not settings.gradium_api_key:
+        await client_ws.accept()
+        await client_ws.send_text(json.dumps({"type": "error", "detail": "GRADIUM_API_KEY not configured"}))
+        await client_ws.close(code=1011)
+        return
+
+    await client_ws.accept()
+    gradium_url = _gradium_ws_url("stt")
+
+    try:
+        async with websockets.connect(
+            gradium_url,
+            extra_headers={"x-api-key": settings.gradium_api_key},
+            max_size=None,
+        ) as gradium_ws:
+            setup_msg = {
+                "type": "setup",
+                "model_name": settings.gradium_stt_model,
+                "input_format": "pcm",
+            }
+            await gradium_ws.send(json.dumps(setup_msg))
+
+            async def forward_client_to_gradium() -> None:
+                while True:
+                    message = await client_ws.receive()
+                    if message.get("type") == "websocket.disconnect":
+                        break
+                    if "bytes" in message and message["bytes"] is not None:
+                        audio_b64 = base64.b64encode(message["bytes"]).decode("ascii")
+                        await gradium_ws.send(json.dumps({"type": "audio", "audio": audio_b64}))
+                    elif "text" in message and message["text"] is not None:
+                        await gradium_ws.send(message["text"])
+
+            async def forward_gradium_to_client() -> None:
+                async for message in gradium_ws:
+                    await client_ws.send_text(message)
+
+            client_task = asyncio.create_task(forward_client_to_gradium())
+            gradium_task = asyncio.create_task(forward_gradium_to_client())
+            done, pending = await asyncio.wait(
+                {client_task, gradium_task},
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            for task in pending:
+                task.cancel()
+            for task in done:
+                if task.exception():
+                    raise task.exception()
+    except WebSocketDisconnect:
+        return
+    except Exception as exc:
+        logger.exception("Voice STT proxy failed")
+        try:
+            await client_ws.send_text(json.dumps({"type": "error", "detail": str(exc)}))
+        finally:
+            await client_ws.close(code=1011)
+
+
+@router.post("/api/voice/tts")
+async def voice_tts(request: TTSRequest) -> Response:
+    if not settings.gradium_api_key:
+        raise HTTPException(status_code=500, detail="GRADIUM_API_KEY not configured")
+
+    text = (request.text or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Text is required")
+
+    payload = {
+        "text": text,
+        "voice_id": settings.gradium_tts_voice_id,
+        "model_name": settings.gradium_tts_model,
+        "output_format": settings.gradium_tts_output_format,
+        "only_audio": True,
+    }
+    headers = {"x-api-key": settings.gradium_api_key}
+    tts_url = _gradium_http_tts_url()
+
+    async with httpx.AsyncClient(timeout=60) as client:
+        resp = await client.post(tts_url, json=payload, headers=headers)
+
+    if resp.status_code >= 400:
+        logger.error("Gradium TTS failed", extra={"status": resp.status_code, "detail": resp.text})
+        raise HTTPException(status_code=502, detail="Gradium TTS failed")
+
+    media_type = "audio/wav" if settings.gradium_tts_output_format == "wav" else "application/octet-stream"
+    return Response(content=resp.content, media_type=media_type)

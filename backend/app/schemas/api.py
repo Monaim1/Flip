@@ -32,3 +32,7 @@ class QueryResponse(BaseModel):
     assistantMessage: str
     intent: str
     queryMetadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class TTSRequest(BaseModel):
+    text: str
