@@ -21,7 +21,7 @@ type VoiceInputState = {
 
 const TARGET_SAMPLE_RATE = 24000;
 const PROCESSOR_BUFFER_SIZE = 4096;
-const DEFAULT_VAD_SILENCE_MS = 900;
+const DEFAULT_VAD_SILENCE_MS = 1500;
 const DEFAULT_VAD_THRESHOLD = 0.012;
 
 const downsampleBuffer = (buffer: Float32Array, inputSampleRate: number, outputSampleRate: number) => {

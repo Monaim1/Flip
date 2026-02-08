@@ -31,7 +31,10 @@ http://localhost:3000
 ```
 
 ## Voice (Gradium)
-The UI includes a mic button (speech-to-text) and a speaker toggle (text-to-speech).
+The UI includes:
+- Mic button (speech-to-text)
+- Speaker toggle (text-to-speech)
+- VAD toggle (auto-stop on silence)
 Voice uses the backend proxy endpoints:
 - `WS /api/voice/stt` (STT)
 - `POST /api/voice/tts` (TTS)

@@ -45,6 +45,10 @@ This UI supports:
 - Text-to-speech (speaker toggle)
 - VAD mode (auto-stop on silence)
 
+Usage:
+- Push-to-talk: click the mic to start/stop recording.
+- VAD: enable the Activity icon to auto-stop on silence.
+
 Voice uses backend proxy endpoints:
 - `WS /api/voice/stt`
 - `POST /api/voice/tts`

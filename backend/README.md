@@ -11,6 +11,7 @@ FastAPI service for the Flip demo. It uses DuckDB for analytics data and a LangG
 - Voice proxy endpoints for Gradium:
   - `WS /api/voice/stt` (speech-to-text)
   - `POST /api/voice/tts` (text-to-speech)
+  - UI supports push-to-talk and optional VAD (auto-stop on silence)
 
 ## Recent Changes (Backend Restructure)
 - Introduced a proper FastAPI package layout under `app/`.
