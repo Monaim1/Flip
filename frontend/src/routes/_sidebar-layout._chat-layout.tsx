@@ -9,9 +9,20 @@ export const Route = createFileRoute('/_sidebar-layout/_chat-layout')({
 function RouteComponent() {
 	return (
 		<AgentProvider>
-			<div className='flex flex-col h-full flex-1 bg-panel min-w-0 overflow-hidden justify-center'>
-				<Outlet />
-				<ChatInput />
+			<div
+				className='flex flex-col h-full flex-1 bg-panel min-w-0 overflow-hidden justify-center relative'
+				style={{
+					backgroundImage: 'url("/Amp.webp")',
+					backgroundSize: 'cover',
+					backgroundPosition: 'center',
+					backgroundRepeat: 'no-repeat',
+				}}
+			>
+				<div className='absolute inset-0 bg-background/20 pointer-events-none' />
+				<div className='relative flex flex-col h-full flex-1'>
+					<Outlet />
+					<ChatInput />
+				</div>
 			</div>
 		</AgentProvider>
 	);

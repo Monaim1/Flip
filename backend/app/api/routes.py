@@ -88,8 +88,13 @@ def _maybe_strip_blocks(
 def _infer_ticker_from_text(text: str) -> str | None:
     if not text:
         return None
+    upper = text.upper()
+    if "S&P 500" in upper or "SP500" in upper or "SPX" in upper:
+        return "SP500"
+    if "BTC" in upper or "BITCOIN" in upper:
+        return "BTC"
     for ticker in ("AAPL", "MSFT", "TSLA"):
-        if ticker in text.upper():
+        if ticker in upper:
             return ticker
     return None
 

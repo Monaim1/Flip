@@ -74,9 +74,38 @@ const normalizeLineChartData = (raw: any, xKey: string, yKeys: string[]) => {
 	return { data: filtered, xKey: resolvedXKey, yKeys: resolvedYKeys };
 };
 
+const computeYDomain = (data: Record<string, unknown>[], yKeys: string[]) => {
+	let min = Number.POSITIVE_INFINITY;
+	let max = Number.NEGATIVE_INFINITY;
+
+	for (const row of data) {
+		for (const key of yKeys) {
+			const value = row[key];
+			if (typeof value === 'number' && Number.isFinite(value)) {
+				if (value < min) min = value;
+				if (value > max) max = value;
+			}
+		}
+	}
+
+	if (!Number.isFinite(min) || !Number.isFinite(max)) {
+		return undefined;
+	}
+
+	if (min === max) {
+		const pad = Math.max(1, Math.abs(min) * 0.01);
+		return [min - pad, max + pad] as [number, number];
+	}
+
+	const range = max - min;
+	const pad = Math.max(range * 0.05, Math.abs(max) * 0.002);
+	return [min - pad, max + pad] as [number, number];
+};
+
 export function LineChart({ title, data, xKey, yKeys }: LineChartProps) {
 	const normalized = normalizeLineChartData(data, xKey, yKeys);
 	const showDots = normalized.data.length < 2;
+	const yDomain = computeYDomain(normalized.data, normalized.yKeys);
 
 	return (
 		<Card className='col-span-full h-[400px]'>
@@ -93,7 +122,12 @@ export function LineChart({ title, data, xKey, yKeys }: LineChartProps) {
 							tickLine={false}
 							tick={{ fontSize: 12, fill: '#64748b' }}
 						/>
-						<YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
+						<YAxis
+							axisLine={false}
+							tickLine={false}
+							tick={{ fontSize: 12, fill: '#64748b' }}
+							domain={yDomain ?? ['auto', 'auto']}
+						/>
 						<Tooltip
 							contentStyle={{
 								borderRadius: '8px',
