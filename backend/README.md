@@ -1,6 +1,6 @@
-# Flip Backend (FastAPI)
+# StockShock Backend (FastAPI)
 
-FastAPI service for the Flip demo. It uses DuckDB for analytics data and a LangGraph + Gemini agent to generate dashboard specs.
+FastAPI service for the StockShock demo. It uses DuckDB for analytics data and a LangGraph + Gemini agent to generate dashboard specs.
 
 ## Features
 - `POST /api/query` parses a natural-language prompt, runs safe SQL, and returns a dashboard spec.
@@ -87,7 +87,7 @@ Request body:
 Request body:
 ```
 {
-  "text": "Hello from Flip"
+  "text": "Hello from StockShock"
 }
 ```
 

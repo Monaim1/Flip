@@ -17,7 +17,7 @@ DEFAULT_DB_PATH = DATA_DIR / "finance.db"
 
 @dataclass(frozen=True)
 class Settings:
-    api_title: str = "Flip API"
+    api_title: str = "StockShock API"
     api_version: str = "0.1.0"
     db_path: str = os.getenv("FINANCE_DB_PATH", str(DEFAULT_DB_PATH))
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "")

@@ -1,9 +1,9 @@
-# Flip (Clean)
+# StockShock
 
 This repo is now a single FastAPI backend and a single frontend UI.
 
 **Kept**
-- `backend/` — FastAPI (Flip)
+- `backend/` — FastAPI (StockShock)
 - `data/finance.db` — local DuckDB data
 - `frontend/` — UI wired to FastAPI
 

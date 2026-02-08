@@ -21,7 +21,8 @@ function RouteComponent() {
 				</div>
 
 				<div className='text-2xl md:text-2xl tracking-tight text-muted-foreground text-center px-6'>
-					{username ? capitalize(username) : ''}, what do you want to analyse?
+					{username ? `${capitalize(username)}, ` : ''}
+					let&#39;s see if our portfolio is cooking — or getting cooked.
 				</div>
 			</div>
 		);

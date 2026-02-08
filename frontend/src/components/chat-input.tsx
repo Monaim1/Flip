@@ -106,7 +106,7 @@ export function ChatInput() {
 					<InputGroupTextarea
 						key={chatId}
 						autoFocus
-						placeholder={isRecording ? 'Listening…' : 'Ask anything about your data...'}
+						placeholder={isRecording ? 'Listening…' : 'Ask StockSHOCK about your data...'}
 						value={displayValue}
 						onChange={(e) => {
 							if (!isRecording) {
