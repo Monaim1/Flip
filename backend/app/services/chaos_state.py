@@ -45,9 +45,31 @@ def set_chaos_state(user_id: str, chaos: Dict[str, Any]) -> None:
     if not user_id or chaos is None:
         return
     ensure_chaos_table()
-    chaos_json = json.dumps(chaos)
-    db_service.execute("DELETE FROM ui_preferences WHERE user_id = ?", [user_id])
+    chaos_json = json.dumps(chaos, sort_keys=True)
+
+    existing = db_service.query(
+        "SELECT chaos_json FROM ui_preferences WHERE user_id = ?",
+        [user_id],
+    )
+    if existing:
+        current = existing[0].get("chaos_json")
+        if isinstance(current, str):
+            try:
+                current_norm = json.dumps(json.loads(current), sort_keys=True)
+                if current_norm == chaos_json:
+                    return
+            except Exception:
+                # If existing JSON is malformed, overwrite with fresh value below.
+                pass
+
     db_service.execute(
-        "INSERT INTO ui_preferences (user_id, chaos_json, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)",
+        """
+        INSERT INTO ui_preferences (user_id, chaos_json, updated_at)
+        VALUES (?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT (user_id) DO UPDATE
+        SET
+            chaos_json = excluded.chaos_json,
+            updated_at = CURRENT_TIMESTAMP
+        """.strip(),
         [user_id, chaos_json],
     )
