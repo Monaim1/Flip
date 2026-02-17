@@ -3,6 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { UIMessage } from '@/types/chat';
 import type { ScrollToBottom, ScrollToBottomOptions } from 'use-stick-to-bottom';
 import type { ChaosState } from '@/types/genui';
+import { DEFAULT_EPIC_UI_STATE } from '@/types/epic';
+import type { EPICUIState, UICommand } from '@/types/epic';
 import { API_URL } from '@/lib/api';
 import { useSession } from '@/lib/auth-client';
 
@@ -17,6 +19,7 @@ export type AgentHelpers = {
 	messages: UIMessage[];
 	setMessages: Dispatch<SetStateAction<UIMessage[]>>;
 	sendMessage: (args: { text: string }) => Promise<void>;
+	uiState: EPICUIState;
 	status: 'idle' | 'streaming';
 	isRunning: boolean;
 	isReadyForNewMessages: boolean;
@@ -42,6 +45,7 @@ export const useAgent = (): AgentHelpers => {
 	const session = useSession();
 	const userId = session?.data?.user?.id ?? 'local';
 	const [messages, setMessages] = useState<UIMessage[]>([]);
+	const [uiState, setUiState] = useState<EPICUIState>(DEFAULT_EPIC_UI_STATE);
 	const [status, setStatus] = useState<'idle' | 'streaming'>('idle');
 	const [error, setError] = useState<Error | undefined>(undefined);
 	const [currentChaos, setCurrentChaos] = useState<ChaosState>(() => {
@@ -122,6 +126,77 @@ export const useAgent = (): AgentHelpers => {
 		);
 	}, []);
 
+	const applyUICommand = useCallback((rawCommand: unknown) => {
+		if (!rawCommand || typeof rawCommand !== 'object') {
+			return;
+		}
+
+		const command = rawCommand as UICommand;
+		const payload = command.payload ?? {};
+
+		switch (command.type) {
+			case 'set_time_range': {
+				const range = payload['range'];
+				if (typeof range === 'string') {
+					setUiState((prev) => ({ ...prev, mode: 'analysis', timeRange: range as any }));
+				}
+				return;
+			}
+			case 'focus_ticker': {
+				const ticker = payload['ticker'];
+				if (typeof ticker === 'string' && ticker.trim()) {
+					setUiState((prev) => ({
+						...prev,
+						mode: 'analysis',
+						focusedTicker: ticker.toUpperCase(),
+						lastIntentNote: null,
+					}));
+				}
+				return;
+			}
+			case 'set_visible_blocks': {
+				const types = payload['types'];
+				if (Array.isArray(types)) {
+					const validTypes = types.filter((type): type is string => typeof type === 'string');
+					setUiState((prev) => ({
+						...prev,
+						mode: 'analysis',
+						visibleBlockTypes: validTypes.length ? validTypes : null,
+					}));
+				}
+				return;
+			}
+			case 'set_chaos': {
+				if (payload && typeof payload === 'object') {
+					const nextChaos = payload as Partial<ChaosState>;
+					setUiState((prev) => ({
+						...prev,
+						mode: 'analysis',
+						chaosOverride: { ...(prev.chaosOverride ?? {}), ...nextChaos },
+					}));
+					setCurrentChaos((prev) => ({ ...prev, ...nextChaos }));
+				}
+				return;
+			}
+			case 'clear_focus': {
+				setUiState((prev) => ({
+					...prev,
+					mode: 'analysis',
+					focusedTicker: null,
+					lastIntentNote: null,
+				}));
+				return;
+			}
+			case 'reset_ui': {
+				setUiState(DEFAULT_EPIC_UI_STATE);
+				return;
+			}
+			default: {
+				return;
+			}
+		}
+	}, []);
+
 	const sendMessage = useCallback(
 		async ({ text }: { text: string }) => {
 			if (status === 'streaming') return;
@@ -160,15 +235,21 @@ export const useAgent = (): AgentHelpers => {
 			};
 
 			try {
-				const response = await fetch(`${API_URL}/api/query/stream`, {
-					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json',
-						Accept: 'text/event-stream',
-					},
-					body: JSON.stringify({ message: text, currentChaos, userId }),
-					signal: abortRef.current.signal,
-				});
+				const connectStream = async (url: string) =>
+					fetch(url, {
+						method: 'POST',
+						headers: {
+							'Content-Type': 'application/json',
+							Accept: 'text/event-stream',
+						},
+						body: JSON.stringify({ message: text, currentChaos, userId }),
+						signal: abortRef.current?.signal,
+					});
+
+				let response = await connectStream(`${API_URL}/api/query/epic-stream`);
+				if (!response.ok || !response.body) {
+					response = await connectStream(`${API_URL}/api/query/stream`);
+				}
 
 				if (!response.ok || !response.body) {
 					throw new Error('Failed to connect to stream');
@@ -219,6 +300,29 @@ export const useAgent = (): AgentHelpers => {
 								'';
 							const finalText = `${finalMessage}\n${JSON.stringify(data)}`;
 							updateAssistantText(assistantId, finalText, false);
+						} else if (currentEvent === 'ui_command') {
+							applyUICommand(data);
+						} else if (currentEvent === 'ui_intent') {
+							const nextIntentNote =
+								(typeof data?.intent?.goal === 'string' && data.intent.goal) ||
+								(typeof data?.summary === 'string' && data.summary) ||
+								'Waiting for more context before updating the UI.';
+							setUiState((prev) => ({
+								...prev,
+								mode: 'context-wait',
+								lastIntentNote: nextIntentNote,
+							}));
+						} else if (currentEvent === 'ui_state') {
+							const pendingIntentCount =
+								typeof data?.pendingIntentCount === 'number' ? data.pendingIntentCount : 0;
+							setUiState((prev) => ({
+								...prev,
+								mode: pendingIntentCount > 0 ? 'context-wait' : 'analysis',
+								lastIntentNote:
+									pendingIntentCount > 0
+										? prev.lastIntentNote || 'Waiting for more context before updating the UI.'
+										: null,
+							}));
 						} else if (currentEvent === 'error') {
 							setError(new Error(data?.detail || 'Agent error'));
 						}
@@ -281,7 +385,7 @@ export const useAgent = (): AgentHelpers => {
 				delete streamedTextRef.current[assistantId];
 			}
 		},
-		[clearError, currentChaos, scrollDownService, status, updateAssistantText, userId],
+		[applyUICommand, clearError, currentChaos, scrollDownService, status, updateAssistantText, userId],
 	);
 
 	const stopAgent = useCallback(async () => {
@@ -295,6 +399,7 @@ export const useAgent = (): AgentHelpers => {
 			messages,
 			setMessages,
 			sendMessage,
+			uiState,
 			status,
 			isRunning: status === 'streaming',
 			isReadyForNewMessages: status !== 'streaming',
@@ -303,7 +408,7 @@ export const useAgent = (): AgentHelpers => {
 			error,
 			clearError,
 		}),
-		[messages, sendMessage, status, stopAgent, scrollDownService.register, error, clearError],
+		[messages, sendMessage, uiState, status, stopAgent, scrollDownService.register, error, clearError],
 	);
 };
 

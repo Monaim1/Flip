@@ -10,9 +10,20 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-DATA_DIR = REPO_ROOT / "data"
-DEFAULT_DB_PATH = DATA_DIR / "finance.db"
+BACKEND_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = BACKEND_ROOT.parent
+
+_DEFAULT_DB_CANDIDATES = [
+    REPO_ROOT / "data" / "finance.db",
+    BACKEND_ROOT / "finance.db",
+    BACKEND_ROOT / "data" / "finance.db",
+]
+for candidate in _DEFAULT_DB_CANDIDATES:
+    if candidate.exists():
+        DEFAULT_DB_PATH = candidate
+        break
+else:
+    DEFAULT_DB_PATH = _DEFAULT_DB_CANDIDATES[0]
 
 
 @dataclass(frozen=True)

@@ -205,8 +205,7 @@ const AssistantMessageBlock = ({
 	message: UIMessage;
 	showResponseLoader: boolean;
 }) => {
-	const { isRunning, messages } = useAgentContext();
-	const isLastMessage = isLast(message, messages);
+	const { uiState } = useAgentContext();
 	const textContent = useMemo(
 		() => message.parts.filter((p) => p.type === 'text').map((p) => p.text).join('\n'),
 		[message.parts],
@@ -254,9 +253,7 @@ const AssistantMessageBlock = ({
 
 			{showResponseLoader && <TextShimmer />}
 
-			{dashboardSpec && dashboardSpec.blocks.length > 0 && <DashboardRenderer spec={dashboardSpec} />}
-
-			{isRunning ? null : null}
+			{dashboardSpec && dashboardSpec.blocks.length > 0 && <DashboardRenderer spec={dashboardSpec} uiState={uiState} />}
 		</div>
 	);
 };

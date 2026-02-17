@@ -8,6 +8,8 @@ import {
 	YAxis,
 } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { filterByDateRange } from '@/lib/charts.utils';
+import type { DateRange } from '@/lib/charts.utils';
 
 interface CandlestickData {
 	date: string;
@@ -20,9 +22,10 @@ interface CandlestickData {
 interface CandlestickChartProps {
 	ticker: string;
 	data: CandlestickData[];
+	timeRange?: DateRange;
 }
 
-export function CandlestickChart({ ticker, data }: CandlestickChartProps) {
+export function CandlestickChart({ ticker, data, timeRange = 'all' }: CandlestickChartProps) {
 	const chartData: CandlestickData[] = data
 		.map((d) => ({
 			date: String((d as CandlestickData).date ?? ''),
@@ -32,6 +35,7 @@ export function CandlestickChart({ ticker, data }: CandlestickChartProps) {
 			close: Number((d as CandlestickData).close),
 		}))
 		.filter((d) => Number.isFinite(d.open) && Number.isFinite(d.high) && Number.isFinite(d.low) && Number.isFinite(d.close));
+	const rangedData = filterByDateRange(chartData, 'date', timeRange);
 
 	const computeYDomain = (rows: CandlestickData[]) => {
 		let min = Number.POSITIVE_INFINITY;
@@ -52,7 +56,7 @@ export function CandlestickChart({ ticker, data }: CandlestickChartProps) {
 		return [min - pad, max + pad] as [number, number];
 	};
 
-	const yDomain = computeYDomain(chartData);
+	const yDomain = computeYDomain(rangedData);
 
 	return (
 		<Card className='col-span-full h-[450px]'>
@@ -61,7 +65,7 @@ export function CandlestickChart({ ticker, data }: CandlestickChartProps) {
 			</CardHeader>
 			<CardContent className='h-[350px]'>
 				<ResponsiveContainer width='100%' height='100%'>
-					<RechartsLineChart data={chartData}>
+					<RechartsLineChart data={rangedData}>
 						<CartesianGrid strokeDasharray='3 3' vertical={false} stroke='#f1f5f9' />
 						<XAxis dataKey='date' axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
 						<YAxis

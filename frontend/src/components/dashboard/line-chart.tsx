@@ -9,12 +9,16 @@ import {
 	YAxis,
 } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { filterByDateRange } from '@/lib/charts.utils';
+import type { DateRange } from '@/lib/charts.utils';
 
 interface LineChartProps {
 	title: string;
 	data: any;
 	xKey: string;
 	yKeys: string[];
+	timeRange?: DateRange;
+	focusedTicker?: string | null;
 }
 
 const COLORS = ['#2563eb', '#10b981', '#ef4444', '#f59e0b', '#6366f1', '#8b5cf6'];
@@ -102,10 +106,13 @@ const computeYDomain = (data: Record<string, unknown>[], yKeys: string[]) => {
 	return [min - pad, max + pad] as [number, number];
 };
 
-export function LineChart({ title, data, xKey, yKeys }: LineChartProps) {
+export function LineChart({ title, data, xKey, yKeys, timeRange = 'all', focusedTicker = null }: LineChartProps) {
 	const normalized = normalizeLineChartData(data, xKey, yKeys);
-	const showDots = normalized.data.length < 2;
-	const yDomain = computeYDomain(normalized.data, normalized.yKeys);
+	const resolvedYKeys =
+		focusedTicker && normalized.yKeys.includes(focusedTicker) ? [focusedTicker] : normalized.yKeys;
+	const rangedData = filterByDateRange(normalized.data, normalized.xKey, timeRange);
+	const showDots = rangedData.length < 2;
+	const yDomain = computeYDomain(rangedData, resolvedYKeys);
 
 	return (
 		<Card className='col-span-full h-[400px]'>
@@ -114,7 +121,7 @@ export function LineChart({ title, data, xKey, yKeys }: LineChartProps) {
 			</CardHeader>
 			<CardContent className='h-[300px]'>
 				<ResponsiveContainer width='100%' height='100%'>
-					<RechartsLineChart data={normalized.data}>
+					<RechartsLineChart data={rangedData}>
 						<CartesianGrid strokeDasharray='3 3' vertical={false} stroke='#f1f5f9' />
 						<XAxis
 							dataKey={normalized.xKey}
@@ -136,7 +143,7 @@ export function LineChart({ title, data, xKey, yKeys }: LineChartProps) {
 							}}
 						/>
 						<Legend verticalAlign='top' height={36} />
-						{normalized.yKeys.map((key, index) => (
+						{resolvedYKeys.map((key, index) => (
 							<Line
 								key={key}
 								type='monotone'

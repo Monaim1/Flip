@@ -1,5 +1,6 @@
 import type React from 'react';
 import type { Block, DashboardSpec } from '@/types/genui';
+import type { EPICUIState } from '@/types/epic';
 import { validateBlock } from '@/lib/genui-validate';
 import { cn } from '@/lib/utils';
 import { ExecutiveSummary } from './executive-summary';
@@ -19,6 +20,7 @@ const FULL_WIDTH_TYPES = new Set([
 
 interface DashboardRendererProps {
 	spec: DashboardSpec;
+	uiState?: EPICUIState;
 }
 
 const BlockErrorFallback = ({ errors }: { errors: string[] }) => (
@@ -32,16 +34,45 @@ const BlockErrorFallback = ({ errors }: { errors: string[] }) => (
 	</div>
 );
 
-const renderBlock = (block: Block) => {
+const blockMentionsTicker = (block: Block, ticker: string) => {
+	const props = block.props ?? {};
+	if (typeof props['ticker'] === 'string' && props['ticker'].toUpperCase() === ticker) {
+		return true;
+	}
+
+	const yKeys = props['yKeys'];
+	if (Array.isArray(yKeys)) {
+		for (const key of yKeys) {
+			if (typeof key === 'string' && key.toUpperCase() === ticker) {
+				return true;
+			}
+		}
+	}
+
+	const title = props['title'];
+	if (typeof title === 'string' && title.toUpperCase().includes(ticker)) {
+		return true;
+	}
+
+	return false;
+};
+
+const renderBlock = (block: Block, uiState?: EPICUIState) => {
 	switch (block.type) {
 		case 'executive-summary':
 			return <ExecutiveSummary {...(block.props as any)} />;
 		case 'kpi-card':
 			return <KPICard {...(block.props as any)} />;
 		case 'line-chart':
-			return <LineChart {...(block.props as any)} />;
+			return (
+				<LineChart
+					{...(block.props as any)}
+					timeRange={uiState?.timeRange}
+					focusedTicker={uiState?.focusedTicker}
+				/>
+			);
 		case 'candlestick-chart':
-			return <CandlestickChart {...(block.props as any)} />;
+			return <CandlestickChart {...(block.props as any)} timeRange={uiState?.timeRange} />;
 		case 'event-timeline':
 			return <EventTimeline {...(block.props as any)} />;
 		case 'correlation-matrix':
@@ -51,14 +82,39 @@ const renderBlock = (block: Block) => {
 	}
 };
 
-export function DashboardRenderer({ spec }: DashboardRendererProps) {
+export function DashboardRenderer({ spec, uiState }: DashboardRendererProps) {
 	if (!spec || !Array.isArray(spec.blocks)) return null;
 
-	const chaos = spec.chaos ?? {};
+	const chaos = { ...(spec.chaos ?? {}), ...(uiState?.chaosOverride ?? {}) };
 	const rotation = chaos.rotation ?? 0;
 	const isMatrix = chaos.theme === 'matrix';
 	const isWobble = chaos.animation === 'wobble';
 	const isRainbow = chaos.animation === 'rainbow';
+
+	const focusedTicker = uiState?.focusedTicker?.toUpperCase() ?? null;
+	const visibleBlockTypes = uiState?.visibleBlockTypes;
+	const filteredBlocks = spec.blocks.filter((block) => {
+		if (!block || typeof block !== 'object') {
+			return false;
+		}
+
+		if (Array.isArray(visibleBlockTypes) && visibleBlockTypes.length > 0) {
+			if (!visibleBlockTypes.includes(block.type)) {
+				return false;
+			}
+		}
+
+		if (!focusedTicker) {
+			return true;
+		}
+
+		// Keep broad context blocks visible even when focusing.
+		if (block.type === 'executive-summary' || block.type === 'event-timeline') {
+			return true;
+		}
+
+		return blockMentionsTicker(block, focusedTicker);
+	});
 
 	const style: React.CSSProperties = {
 		fontFamily: chaos.fontFamily || undefined,
@@ -75,7 +131,12 @@ export function DashboardRenderer({ spec }: DashboardRendererProps) {
 			)}
 			style={style}
 		>
-			{spec.blocks.map((block, index) => {
+			{uiState?.mode === 'context-wait' && uiState.lastIntentNote && (
+				<div className='col-span-full rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground'>
+					{uiState.lastIntentNote}
+				</div>
+			)}
+			{filteredBlocks.map((block, index) => {
 				const errors = validateBlock(block, index);
 				if (errors.length > 0) {
 					return (
@@ -87,7 +148,7 @@ export function DashboardRenderer({ spec }: DashboardRendererProps) {
 
 				return (
 					<div key={index} className={cn(FULL_WIDTH_TYPES.has(block.type) ? 'col-span-full' : '')}>
-						{renderBlock(block)}
+						{renderBlock(block, uiState)}
 					</div>
 				);
 			})}

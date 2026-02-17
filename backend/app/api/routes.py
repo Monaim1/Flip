@@ -23,6 +23,7 @@ from app.schemas.api import (
 )
 from app.services.db import db_service
 from app.services.agent import agent_service
+from app.services.epic import epic_coordinator_service
 from app.services.chaos_state import get_chaos_state, set_chaos_state
 from app.utils.json_tools import normalize_dashboard_spec, replace_query_placeholders
 from app.utils.sql_guard import filter_safe_queries
@@ -279,6 +280,105 @@ async def handle_query_stream(request: QueryRequest) -> StreamingResponse:
 
         except Exception as exc:
             logger.exception("SSE stream failed")
+            yield f"event: error\ndata: {json.dumps({'detail': str(exc)})}\n\n"
+
+        yield "event: done\ndata: {}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@router.post("/api/query/epic-stream")
+async def handle_query_epic_stream(request: QueryRequest) -> StreamingResponse:
+    """EPIC stream: voice and UI agents run in parallel.
+
+    Voice events:
+      - content, step, result, error
+    UI events:
+      - ui_command, ui_intent, ui_state, ui_error
+    """
+    start_time = time.time()
+    user_id = request.userId or "local"
+    current_chaos = request.currentChaos
+    if not current_chaos and user_id:
+        current_chaos = get_chaos_state(user_id)
+
+    async def event_generator():
+        streamed_content = False
+        try:
+            async for stream_event in epic_coordinator_service.stream_turn(
+                message=request.message,
+                current_chaos=current_chaos,
+                user_id=user_id,
+            ):
+                event_type = stream_event.get("event")
+                data = stream_event.get("data")
+
+                if event_type == "result":
+                    payload = data if isinstance(data, dict) else {}
+                    hydrated_spec, sql_queries, safe_queries = _finalize_spec(
+                        payload,
+                        current_chaos,
+                    )
+                    intent = payload.get("intent", "unknown")
+                    hydrated_spec = _maybe_strip_blocks(
+                        hydrated_spec,
+                        intent,
+                        sql_queries,
+                        safe_queries,
+                    )
+                    hydrated_spec = _hydrate_missing_time_series(hydrated_spec)
+                    if user_id:
+                        chaos = hydrated_spec.get("chaos")
+                        if isinstance(chaos, dict):
+                            set_chaos_state(user_id, chaos)
+
+                    elapsed_ms = int((time.time() - start_time) * 1000)
+                    final = {
+                        "dashboardSpec": DashboardSpec.model_validate(
+                            hydrated_spec
+                        ).model_dump(),
+                        "assistantMessage": payload.get("assistantMessage", ""),
+                        "intent": intent,
+                        "queryMetadata": {
+                            "executionTimeMs": elapsed_ms,
+                            "sqlQueriesRequested": len(sql_queries),
+                            "sqlQueriesExecuted": len(safe_queries),
+                        },
+                    }
+                    assistant_msg = final.get("assistantMessage") or ""
+                    if assistant_msg and not streamed_content:
+                        chunk_size = 80
+                        for i in range(0, len(assistant_msg), chunk_size):
+                            chunk = assistant_msg[i : i + chunk_size]
+                            yield (
+                                "event: content\n"
+                                f"data: {json.dumps({'delta': chunk}, default=str)}\n\n"
+                            )
+                        streamed_content = True
+                    yield f"event: result\ndata: {json.dumps(final, default=str)}\n\n"
+                    continue
+
+                if event_type == "content":
+                    streamed_content = True
+                    yield f"event: content\ndata: {json.dumps(data, default=str)}\n\n"
+                    continue
+
+                if event_type in {"ui_command", "ui_intent", "ui_state", "ui_error"}:
+                    # Keep UI side-channel independent from voice response pacing.
+                    yield f"event: {event_type}\ndata: {json.dumps(data, default=str)}\n\n"
+                    continue
+
+                yield f"event: {event_type}\ndata: {json.dumps(data, default=str)}\n\n"
+        except Exception as exc:
+            logger.exception("EPIC SSE stream failed")
             yield f"event: error\ndata: {json.dumps({'detail': str(exc)})}\n\n"
 
         yield "event: done\ndata: {}\n\n"
