@@ -2,12 +2,36 @@ import argparse
 import datetime as dt
 import os
 import random
+from pathlib import Path
 
 import duckdb
 
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-DEFAULT_DB_PATH = os.path.join(BASE_DIR, "data", "finance.db")
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = BACKEND_ROOT.parent
+
+
+def resolve_default_db_path() -> str:
+    env_path = os.getenv("FINANCE_DB_PATH")
+    if env_path:
+        candidate = Path(env_path)
+        if not candidate.is_absolute():
+            candidate = (BACKEND_ROOT / candidate).resolve()
+        if candidate.exists():
+            return str(candidate)
+
+    candidates = [
+        REPO_ROOT / "data" / "finance.db",
+        BACKEND_ROOT / "finance.db",
+        BACKEND_ROOT / "data" / "finance.db",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate)
+    return str(candidates[1])
+
+
+DEFAULT_DB_PATH = resolve_default_db_path()
 
 
 def setup_db(conn: duckdb.DuckDBPyConnection) -> None:

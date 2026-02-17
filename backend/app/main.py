@@ -5,6 +5,7 @@ from app.core.config import settings
 from app.core.logging import configure_logging
 from app.api.routes import router as api_router
 from app.services.chaos_state import ensure_chaos_table
+from app.services.db import ensure_analytics_tables
 
 configure_logging()
 
@@ -20,6 +21,7 @@ app.add_middleware(
 
 @app.on_event("startup")
 def _init_chaos_state() -> None:
+    ensure_analytics_tables()
     ensure_chaos_table()
 
 app.include_router(api_router)

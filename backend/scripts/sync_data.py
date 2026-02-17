@@ -3,12 +3,37 @@ import os
 import requests
 import duckdb
 from datetime import datetime
+from pathlib import Path
 
 import argparse
 
-# Root finance.db path relative to this script (backend/scripts/sync_data.py)
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-DB_PATH = os.path.join(BASE_DIR, "data", "finance.db")
+# Root paths
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = BACKEND_ROOT.parent
+
+
+def resolve_db_path() -> str:
+    env_path = os.getenv("FINANCE_DB_PATH")
+    if env_path:
+        candidate = Path(env_path)
+        if not candidate.is_absolute():
+            candidate = (BACKEND_ROOT / candidate).resolve()
+        if candidate.exists():
+            return str(candidate)
+
+    candidates = [
+        REPO_ROOT / "data" / "finance.db",
+        BACKEND_ROOT / "finance.db",
+        BACKEND_ROOT / "data" / "finance.db",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate)
+
+    return str(candidates[1])
+
+
+DB_PATH = resolve_db_path()
 
 # Default fixtures from ai-hedge-fund
 DEFAULT_TICKERS = ["AAPL", "MSFT", "TSLA"]

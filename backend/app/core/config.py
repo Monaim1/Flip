@@ -18,19 +18,33 @@ _DEFAULT_DB_CANDIDATES = [
     BACKEND_ROOT / "finance.db",
     BACKEND_ROOT / "data" / "finance.db",
 ]
-for candidate in _DEFAULT_DB_CANDIDATES:
-    if candidate.exists():
-        DEFAULT_DB_PATH = candidate
-        break
-else:
-    DEFAULT_DB_PATH = _DEFAULT_DB_CANDIDATES[0]
+
+
+def _resolve_default_db_path() -> Path:
+    for candidate in _DEFAULT_DB_CANDIDATES:
+        if candidate.exists():
+            return candidate
+    return _DEFAULT_DB_CANDIDATES[0]
+
+
+def _resolve_db_path_from_env() -> str:
+    raw = os.getenv("FINANCE_DB_PATH")
+    if raw:
+        candidate = Path(raw)
+        if not candidate.is_absolute():
+            # Treat relative env paths as backend-root relative.
+            candidate = (BACKEND_ROOT / candidate).resolve()
+        if candidate.exists():
+            return str(candidate)
+
+    return str(_resolve_default_db_path())
 
 
 @dataclass(frozen=True)
 class Settings:
     api_title: str = "StockShock API"
     api_version: str = "0.1.0"
-    db_path: str = os.getenv("FINANCE_DB_PATH", str(DEFAULT_DB_PATH))
+    db_path: str = _resolve_db_path_from_env()
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
     openai_model: str = os.getenv("OPENAI_MODEL", "gpt-5")
     gemini_api_key: str = os.getenv("GEMINI_API_KEY", "")
