@@ -21,7 +21,7 @@ interface LineChartProps {
 	focusedTicker?: string | null;
 }
 
-const COLORS = ['#2563eb', '#10b981', '#ef4444', '#f59e0b', '#6366f1', '#8b5cf6'];
+const COLORS = ['#4769d0', '#2b9d7f', '#c24c5a', '#b88a2b', '#6f5ecf', '#6b7d3c'];
 
 const toNumber = (value: unknown) => {
 	if (value == null) return null;
@@ -122,24 +122,25 @@ export function LineChart({ title, data, xKey, yKeys, timeRange = 'all', focused
 			<CardContent className='h-[300px]'>
 				<ResponsiveContainer width='100%' height='100%'>
 					<RechartsLineChart data={rangedData}>
-						<CartesianGrid strokeDasharray='3 3' vertical={false} stroke='#f1f5f9' />
+						<CartesianGrid strokeDasharray='3 3' vertical={false} stroke='#d7dde4' />
 						<XAxis
 							dataKey={normalized.xKey}
 							axisLine={false}
 							tickLine={false}
-							tick={{ fontSize: 12, fill: '#64748b' }}
+							tick={{ fontSize: 12, fill: '#5c6673' }}
 						/>
 						<YAxis
 							axisLine={false}
 							tickLine={false}
-							tick={{ fontSize: 12, fill: '#64748b' }}
+							tick={{ fontSize: 12, fill: '#5c6673' }}
 							domain={yDomain ?? ['auto', 'auto']}
 						/>
 						<Tooltip
 							contentStyle={{
 								borderRadius: '8px',
-								border: 'none',
-								boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+								border: '1px solid #d7dde4',
+								backgroundColor: '#f7f8fa',
+								boxShadow: '0 8px 20px -12px rgb(0 0 0 / 0.22)',
 							}}
 						/>
 						<Legend verticalAlign='top' height={36} />

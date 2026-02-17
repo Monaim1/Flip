@@ -66,25 +66,26 @@ export function CandlestickChart({ ticker, data, timeRange = 'all' }: Candlestic
 			<CardContent className='h-[350px]'>
 				<ResponsiveContainer width='100%' height='100%'>
 					<RechartsLineChart data={rangedData}>
-						<CartesianGrid strokeDasharray='3 3' vertical={false} stroke='#f1f5f9' />
-						<XAxis dataKey='date' axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
+						<CartesianGrid strokeDasharray='3 3' vertical={false} stroke='#d7dde4' />
+						<XAxis dataKey='date' axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#5c6673' }} />
 						<YAxis
 							axisLine={false}
 							tickLine={false}
-							tick={{ fontSize: 12, fill: '#64748b' }}
+							tick={{ fontSize: 12, fill: '#5c6673' }}
 							domain={yDomain ?? ['auto', 'auto']}
 						/>
 						<Tooltip
 							contentStyle={{
 								borderRadius: '8px',
-								border: 'none',
-								boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+								border: '1px solid #d7dde4',
+								backgroundColor: '#f7f8fa',
+								boxShadow: '0 8px 20px -12px rgb(0 0 0 / 0.22)',
 							}}
 						/>
 						<Line
 							type='monotone'
 							dataKey='close'
-							stroke='#2563eb'
+							stroke='#4769d0'
 							strokeWidth={2}
 							dot={false}
 							activeDot={{ r: 4 }}
