@@ -55,6 +55,9 @@ export function ChatMessages() {
 }
 
 const getAssistantText = (message: UIMessage) => {
+	if (typeof message.assistantText === 'string' && message.assistantText.trim().length > 0) {
+		return message.assistantText.trim();
+	}
 	const textContent = message.parts
 		.filter((p) => p.type === 'text')
 		.map((p) => p.text)
@@ -212,11 +215,16 @@ const AssistantMessageBlock = ({
 	);
 	const hasStreamingText = message.parts.some((p) => 'state' in p && p.state === 'streaming');
 	const extracted = useMemo(
-		() => (hasStreamingText ? null : extractDashboardSpecFromText(textContent)),
-		[hasStreamingText, textContent],
+		() => (hasStreamingText || message.dashboardSpec || message.assistantText ? null : extractDashboardSpecFromText(textContent)),
+		[hasStreamingText, message.assistantText, message.dashboardSpec, textContent],
 	);
-	const assistantText = extracted?.assistantText?.trim() ? extracted.assistantText : null;
-	const dashboardSpec = extracted?.spec ?? null;
+	const assistantText =
+		typeof message.assistantText === 'string' && message.assistantText.trim().length > 0
+			? message.assistantText
+			: extracted?.assistantText?.trim()
+				? extracted.assistantText
+				: null;
+	const dashboardSpec = message.dashboardSpec ?? extracted?.spec ?? null;
 	let renderedAssistantText = false;
 
 	if (!message.parts.length && !showResponseLoader) {

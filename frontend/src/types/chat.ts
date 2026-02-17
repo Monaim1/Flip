@@ -1,3 +1,5 @@
+import type { DashboardSpec } from '@/types/genui';
+
 export type UIMessagePart = {
 	type: 'text';
 	text: string;
@@ -8,6 +10,8 @@ export type UIMessage = {
 	id: string;
 	role: 'user' | 'assistant';
 	parts: UIMessagePart[];
+	assistantText?: string;
+	dashboardSpec?: DashboardSpec;
 	reasoning?: string;
 };
 

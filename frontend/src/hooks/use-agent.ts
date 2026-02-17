@@ -19,6 +19,7 @@ export type AgentHelpers = {
 	messages: UIMessage[];
 	setMessages: Dispatch<SetStateAction<UIMessage[]>>;
 	sendMessage: (args: { text: string }) => Promise<void>;
+	resetUI: () => void;
 	uiState: EPICUIState;
 	status: 'idle' | 'streaming';
 	isRunning: boolean;
@@ -40,6 +41,8 @@ const createAssistantMessage = (): UIMessage => ({
 	role: 'assistant',
 	parts: [{ type: 'text', text: '', state: 'streaming' }],
 });
+
+const DASHBOARD_RENDER_DELAY_MS = 2000;
 
 export const useAgent = (): AgentHelpers => {
 	const session = useSession();
@@ -66,6 +69,7 @@ export const useAgent = (): AgentHelpers => {
 	const [hasLoadedChaos, setHasLoadedChaos] = useState(false);
 	const abortRef = useRef<AbortController | null>(null);
 	const streamedTextRef = useRef<Record<string, string>>({});
+	const dashboardRevealTimersRef = useRef<Record<string, number>>({});
 	const scrollDownService = useScrollDownCallbackService();
 
 	const clearError = useCallback(() => setError(undefined), []);
@@ -120,17 +124,72 @@ export const useAgent = (): AgentHelpers => {
 		}));
 	}, [currentChaos]);
 
-	const updateAssistantText = useCallback((messageId: string, text: string, isStreaming: boolean) => {
-		setMessages((prev) =>
-			prev.map((m) =>
-				m.id === messageId
-					? {
-							...m,
-							parts: [{ type: 'text', text, state: isStreaming ? 'streaming' : 'done' }],
-						}
-					: m,
-			),
-		);
+	const clearDashboardRevealTimer = useCallback((messageId: string) => {
+		const timer = dashboardRevealTimersRef.current[messageId];
+		if (timer == null) {
+			return;
+		}
+		window.clearTimeout(timer);
+		delete dashboardRevealTimersRef.current[messageId];
+	}, []);
+
+	const setAssistantResult = useCallback(
+		(messageId: string, result: any) => {
+			const finalMessage =
+				(result?.assistantMessage && String(result.assistantMessage).trim()) ||
+				streamedTextRef.current[messageId] ||
+				'';
+
+			setMessages((prev) =>
+				prev.map((m) =>
+					m.id === messageId
+						? {
+								...m,
+								assistantText: finalMessage,
+								dashboardSpec: undefined,
+								parts: [{ type: 'text', text: finalMessage, state: 'done' }],
+							}
+						: m,
+				),
+			);
+
+			clearDashboardRevealTimer(messageId);
+
+			const dashboardSpec =
+				result?.dashboardSpec && typeof result.dashboardSpec === 'object' ? result.dashboardSpec : null;
+			if (!dashboardSpec) {
+				return;
+			}
+
+			dashboardRevealTimersRef.current[messageId] = window.setTimeout(() => {
+				setMessages((prev) =>
+					prev.map((m) =>
+						m.id === messageId
+							? {
+									...m,
+									dashboardSpec,
+								}
+							: m,
+					),
+				);
+				delete dashboardRevealTimersRef.current[messageId];
+			}, DASHBOARD_RENDER_DELAY_MS);
+		},
+		[clearDashboardRevealTimer],
+	);
+
+	useEffect(() => {
+		return () => {
+			for (const timer of Object.values(dashboardRevealTimersRef.current)) {
+				window.clearTimeout(timer);
+			}
+			dashboardRevealTimersRef.current = {};
+		};
+	}, []);
+
+	const resetUI = useCallback(() => {
+		setUiState(DEFAULT_EPIC_UI_STATE);
+		setCurrentChaos(DEFAULT_CHAOS);
 	}, []);
 
 	const applyUICommand = useCallback((rawCommand: unknown) => {
@@ -195,14 +254,14 @@ export const useAgent = (): AgentHelpers => {
 				return;
 			}
 			case 'reset_ui': {
-				setUiState(DEFAULT_EPIC_UI_STATE);
+				resetUI();
 				return;
 			}
 			default: {
 				return;
 			}
 		}
-	}, []);
+	}, [resetUI]);
 
 	const sendMessage = useCallback(
 		async ({ text }: { text: string }) => {
@@ -239,12 +298,7 @@ export const useAgent = (): AgentHelpers => {
 						chaosOverride: { ...(prev.chaosOverride ?? {}), ...nextChaos },
 					}));
 				}
-				const fallbackText =
-					(data.assistantMessage && data.assistantMessage.trim()) ||
-					streamedTextRef.current[assistantId] ||
-					'';
-				const finalText = `${fallbackText}\n${JSON.stringify(data)}`;
-				updateAssistantText(assistantId, finalText, false);
+				setAssistantResult(assistantId, data);
 			};
 
 			try {
@@ -323,12 +377,7 @@ export const useAgent = (): AgentHelpers => {
 									chaosOverride: { ...(prev.chaosOverride ?? {}), ...nextChaos },
 								}));
 							}
-							const finalMessage =
-								(data.assistantMessage && data.assistantMessage.trim()) ||
-								streamedTextRef.current[assistantId] ||
-								'';
-							const finalText = `${finalMessage}\n${JSON.stringify(data)}`;
-							updateAssistantText(assistantId, finalText, false);
+							setAssistantResult(assistantId, data);
 						} else if (currentEvent === 'ui_command') {
 							applyUICommand(data);
 						} else if (currentEvent === 'ui_intent') {
@@ -414,7 +463,7 @@ export const useAgent = (): AgentHelpers => {
 				delete streamedTextRef.current[assistantId];
 			}
 		},
-		[applyUICommand, clearError, currentChaos, scrollDownService, status, updateAssistantText, userId],
+		[applyUICommand, clearError, currentChaos, scrollDownService, setAssistantResult, status, userId],
 	);
 
 	const stopAgent = useCallback(async () => {
@@ -428,6 +477,7 @@ export const useAgent = (): AgentHelpers => {
 			messages,
 			setMessages,
 			sendMessage,
+			resetUI,
 			uiState,
 			status,
 			isRunning: status === 'streaming',
@@ -437,7 +487,7 @@ export const useAgent = (): AgentHelpers => {
 			error,
 			clearError,
 		}),
-		[messages, sendMessage, uiState, status, stopAgent, scrollDownService.register, error, clearError],
+		[messages, sendMessage, resetUI, uiState, status, stopAgent, scrollDownService.register, error, clearError],
 	);
 };
 

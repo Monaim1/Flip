@@ -18,6 +18,7 @@ const isObject = (value: unknown): value is Record<string, unknown> =>
 	value != null && typeof value === 'object' && !Array.isArray(value);
 
 const isNonEmptyString = (value: unknown): value is string => typeof value === 'string' && value.trim().length > 0;
+const isFiniteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
 
 const isStringArray = (value: unknown): value is string[] => Array.isArray(value) && value.every((item) => typeof item === 'string');
 
@@ -53,9 +54,15 @@ export const validateBlock = (block: unknown, index: number): string[] => {
 		case 'kpi-card': {
 			if (!isNonEmptyString(props.ticker)) errors.push(`Block ${index}: kpi-card.props.ticker must be a non-empty string.`);
 			if (!isNonEmptyString(props.metric)) errors.push(`Block ${index}: kpi-card.props.metric must be a non-empty string.`);
-			if (!isNonEmptyString(props.value)) errors.push(`Block ${index}: kpi-card.props.value must be a non-empty string.`);
-			if (!isNonEmptyString(props.change)) errors.push(`Block ${index}: kpi-card.props.change must be a non-empty string.`);
-			if (props.changeDirection !== 'up' && props.changeDirection !== 'down') {
+			if (!isNonEmptyString(props.value) && !isFiniteNumber(props.value)) {
+				errors.push(`Block ${index}: kpi-card.props.value must be a string or number.`);
+			}
+			if (
+				props.changeDirection !== undefined &&
+				props.changeDirection !== null &&
+				props.changeDirection !== 'up' &&
+				props.changeDirection !== 'down'
+			) {
 				errors.push(`Block ${index}: kpi-card.props.changeDirection must be "up" or "down".`);
 			}
 			break;

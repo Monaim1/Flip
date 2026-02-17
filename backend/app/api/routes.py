@@ -316,16 +316,25 @@ async def handle_query_stream(request: QueryRequest) -> StreamingResponse:
                 data = sse_event["data"]
 
                 if event_type == "result":
+                    payload = data if isinstance(data, dict) else {}
+                    assistant_msg = payload.get("assistantMessage", "")
+                    if assistant_msg and not streamed_content:
+                        chunk_size = 80
+                        for i in range(0, len(assistant_msg), chunk_size):
+                            chunk = assistant_msg[i : i + chunk_size]
+                            yield f"event: content\ndata: {json.dumps({'delta': chunk}, default=str)}\n\n"
+                        streamed_content = True
+
                     # Finalize the spec the same way as the non-streaming path
                     hydrated_spec, sql_queries, safe_queries = _finalize_spec(
-                        data, current_chaos
+                        payload, current_chaos
                     )
-                    intent = data.get("intent", "unknown") if isinstance(data, dict) else "unknown"
+                    intent = payload.get("intent", "unknown")
                     hydrated_spec = _maybe_strip_blocks(hydrated_spec, intent, sql_queries, safe_queries)
                     hydrated_spec = _hydrate_missing_time_series(hydrated_spec)
                     hydrated_spec, contract_warnings = sanitize_dashboard_spec(
                         hydrated_spec,
-                        assistant_message=data.get("assistantMessage", "") if isinstance(data, dict) else "",
+                        assistant_message=assistant_msg,
                         chaos_fallback=current_chaos,
                     )
                     hydrated_spec = _apply_chaos_commands_from_text(
@@ -340,8 +349,8 @@ async def handle_query_stream(request: QueryRequest) -> StreamingResponse:
                     elapsed_ms = int((time.time() - start_time) * 1000)
                     final = {
                         "dashboardSpec": DashboardSpec.model_validate(hydrated_spec).model_dump(),
-                        "assistantMessage": data.get("assistantMessage", ""),
-                        "intent": data.get("intent", "unknown"),
+                        "assistantMessage": assistant_msg,
+                        "intent": intent,
                         "queryMetadata": {
                             "executionTimeMs": elapsed_ms,
                             "sqlQueriesRequested": len(sql_queries),
@@ -350,14 +359,6 @@ async def handle_query_stream(request: QueryRequest) -> StreamingResponse:
                             "contractWarnings": contract_warnings,
                         },
                     }
-                    # If the model never streamed content, simulate a short stream from assistantMessage
-                    assistant_msg = final.get("assistantMessage") or ""
-                    if assistant_msg and not streamed_content:
-                        chunk_size = 80
-                        for i in range(0, len(assistant_msg), chunk_size):
-                            chunk = assistant_msg[i : i + chunk_size]
-                            yield f"event: content\ndata: {json.dumps({'delta': chunk}, default=str)}\n\n"
-                        streamed_content = True
                     yield f"event: result\ndata: {json.dumps(final, default=str)}\n\n"
                 elif event_type == "content":
                     streamed_content = True
@@ -410,6 +411,17 @@ async def handle_query_epic_stream(request: QueryRequest) -> StreamingResponse:
 
                 if event_type == "result":
                     payload = data if isinstance(data, dict) else {}
+                    assistant_msg = payload.get("assistantMessage", "")
+                    if assistant_msg and not streamed_content:
+                        chunk_size = 80
+                        for i in range(0, len(assistant_msg), chunk_size):
+                            chunk = assistant_msg[i : i + chunk_size]
+                            yield (
+                                "event: content\n"
+                                f"data: {json.dumps({'delta': chunk}, default=str)}\n\n"
+                            )
+                        streamed_content = True
+
                     hydrated_spec, sql_queries, safe_queries = _finalize_spec(
                         payload,
                         current_chaos,
@@ -424,7 +436,7 @@ async def handle_query_epic_stream(request: QueryRequest) -> StreamingResponse:
                     hydrated_spec = _hydrate_missing_time_series(hydrated_spec)
                     hydrated_spec, contract_warnings = sanitize_dashboard_spec(
                         hydrated_spec,
-                        assistant_message=payload.get("assistantMessage", ""),
+                        assistant_message=assistant_msg,
                         chaos_fallback=current_chaos,
                     )
                     hydrated_spec = _apply_chaos_commands_from_text(
@@ -442,7 +454,7 @@ async def handle_query_epic_stream(request: QueryRequest) -> StreamingResponse:
                         "dashboardSpec": DashboardSpec.model_validate(
                             hydrated_spec
                         ).model_dump(),
-                        "assistantMessage": payload.get("assistantMessage", ""),
+                        "assistantMessage": assistant_msg,
                         "intent": intent,
                         "queryMetadata": {
                             "executionTimeMs": elapsed_ms,
@@ -452,16 +464,6 @@ async def handle_query_epic_stream(request: QueryRequest) -> StreamingResponse:
                             "contractWarnings": contract_warnings,
                         },
                     }
-                    assistant_msg = final.get("assistantMessage") or ""
-                    if assistant_msg and not streamed_content:
-                        chunk_size = 80
-                        for i in range(0, len(assistant_msg), chunk_size):
-                            chunk = assistant_msg[i : i + chunk_size]
-                            yield (
-                                "event: content\n"
-                                f"data: {json.dumps({'delta': chunk}, default=str)}\n\n"
-                            )
-                        streamed_content = True
                     yield f"event: result\ndata: {json.dumps(final, default=str)}\n\n"
                     continue
 
