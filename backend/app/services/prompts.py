@@ -72,6 +72,9 @@ Block types and required props:
 IMPORTANT:
 • Use "QUERY_RESULT_0", "QUERY_RESULT_1", etc. as placeholders in the props for data that you fetch using the `run_query` tool.
 • The backend will automatically replace these placeholders with the actual tool results.
+• line-chart yKeys MUST match numeric column names in the query result rows.
+• For stock_prices rows, use yKeys like ["close"] or ["high","low","close"] (not ticker symbols).
+• If you want ticker symbols in yKeys, alias query columns to those symbols first.
 • Format numbers nicely in kpi-card values/changes (e.g. "$182.34", "+4.5%").
 • Always include an executive-summary block first for data questions.
 • For stock performance questions, ALWAYS include at least one line-chart or candlestick-chart block per ticker with stock_prices data.

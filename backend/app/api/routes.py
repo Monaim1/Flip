@@ -25,6 +25,7 @@ from app.services.db import db_service
 from app.services.agent import agent_service
 from app.services.epic import epic_coordinator_service
 from app.services.chaos_state import get_chaos_state, set_chaos_state
+from app.utils.dashboard_contract import sanitize_dashboard_spec
 from app.utils.json_tools import normalize_dashboard_spec, replace_query_placeholders
 from app.utils.sql_guard import filter_safe_queries
 
@@ -195,6 +196,11 @@ async def handle_query(request: QueryRequest) -> QueryResponse:
     assistant_message = agent_result.get("assistantMessage", "") if isinstance(agent_result, dict) else ""
     hydrated_spec = _maybe_strip_blocks(hydrated_spec, intent, sql_queries, safe_queries)
     hydrated_spec = _hydrate_missing_time_series(hydrated_spec)
+    hydrated_spec, contract_warnings = sanitize_dashboard_spec(
+        hydrated_spec,
+        assistant_message=assistant_message,
+        chaos_fallback=current_chaos,
+    )
     if user_id:
         chaos = hydrated_spec.get("chaos")
         if isinstance(chaos, dict):
@@ -209,6 +215,8 @@ async def handle_query(request: QueryRequest) -> QueryResponse:
             "executionTimeMs": elapsed_ms,
             "sqlQueriesRequested": len(sql_queries),
             "sqlQueriesExecuted": len(safe_queries),
+            "contractVersion": "1.0",
+            "contractWarnings": contract_warnings,
         },
     )
 
@@ -248,6 +256,11 @@ async def handle_query_stream(request: QueryRequest) -> StreamingResponse:
                     intent = data.get("intent", "unknown") if isinstance(data, dict) else "unknown"
                     hydrated_spec = _maybe_strip_blocks(hydrated_spec, intent, sql_queries, safe_queries)
                     hydrated_spec = _hydrate_missing_time_series(hydrated_spec)
+                    hydrated_spec, contract_warnings = sanitize_dashboard_spec(
+                        hydrated_spec,
+                        assistant_message=data.get("assistantMessage", "") if isinstance(data, dict) else "",
+                        chaos_fallback=current_chaos,
+                    )
                     if user_id:
                         chaos = hydrated_spec.get("chaos")
                         if isinstance(chaos, dict):
@@ -261,6 +274,8 @@ async def handle_query_stream(request: QueryRequest) -> StreamingResponse:
                             "executionTimeMs": elapsed_ms,
                             "sqlQueriesRequested": len(sql_queries),
                             "sqlQueriesExecuted": len(safe_queries),
+                            "contractVersion": "1.0",
+                            "contractWarnings": contract_warnings,
                         },
                     }
                     # If the model never streamed content, simulate a short stream from assistantMessage
@@ -335,6 +350,11 @@ async def handle_query_epic_stream(request: QueryRequest) -> StreamingResponse:
                         safe_queries,
                     )
                     hydrated_spec = _hydrate_missing_time_series(hydrated_spec)
+                    hydrated_spec, contract_warnings = sanitize_dashboard_spec(
+                        hydrated_spec,
+                        assistant_message=payload.get("assistantMessage", ""),
+                        chaos_fallback=current_chaos,
+                    )
                     if user_id:
                         chaos = hydrated_spec.get("chaos")
                         if isinstance(chaos, dict):
@@ -351,6 +371,8 @@ async def handle_query_epic_stream(request: QueryRequest) -> StreamingResponse:
                             "executionTimeMs": elapsed_ms,
                             "sqlQueriesRequested": len(sql_queries),
                             "sqlQueriesExecuted": len(safe_queries),
+                            "contractVersion": "1.0",
+                            "contractWarnings": contract_warnings,
                         },
                     }
                     assistant_msg = final.get("assistantMessage") or ""

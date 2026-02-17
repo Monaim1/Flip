@@ -9,6 +9,7 @@ FastAPI service for the StockShock demo. It uses DuckDB for analytics data and a
 - `GET /health` returns a simple status.
 - SQL safety guardrails (SELECT-only, allowed tables).
 - Schema-aligned agent prompt for the existing DuckDB dataset.
+- Dashboard contract normalization layer that coerces LLM blocks into renderer-safe props.
 - Voice proxy endpoints for Gradium:
   - `WS /api/voice/stt` (speech-to-text)
   - `POST /api/voice/tts` (text-to-speech)
