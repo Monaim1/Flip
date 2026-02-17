@@ -4,6 +4,7 @@ import asyncio
 import base64
 import json
 import logging
+import re
 import time
 from typing import Any, Dict, List
 
@@ -32,6 +33,12 @@ from app.utils.sql_guard import filter_safe_queries
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+DEFAULT_CHAOS = {
+    "rotation": 0,
+    "fontFamily": "Inter",
+    "animation": None,
+    "theme": "professional",
+}
 
 
 @router.get("/health")
@@ -171,6 +178,61 @@ def _hydrate_missing_time_series(hydrated_spec: Dict[str, Any]) -> Dict[str, Any
     return hydrated_spec
 
 
+def _apply_chaos_commands_from_text(
+    message_text: str,
+    spec: Dict[str, Any],
+    current_chaos: Any,
+) -> Dict[str, Any]:
+    if not isinstance(spec, dict):
+        return spec
+
+    text = (message_text or "").lower()
+    if not text.strip():
+        return spec
+
+    if isinstance(spec.get("chaos"), dict):
+        chaos = dict(spec["chaos"])
+    elif isinstance(current_chaos, dict):
+        chaos = dict(current_chaos)
+    else:
+        chaos = dict(DEFAULT_CHAOS)
+
+    has_command = False
+
+    if "professional mode" in text:
+        chaos = dict(DEFAULT_CHAOS)
+        has_command = True
+    else:
+        if "kase mode" in text:
+            chaos["rotation"] = 180
+            chaos["fontFamily"] = "Comic Sans MS, Comic Sans, cursive"
+            has_command = True
+
+        if re.search(r"\b(flip|upside down)\b", text):
+            chaos["rotation"] = 180
+            has_command = True
+
+        if re.search(r"\bcomic\s+(?:sans|sense)\b", text):
+            chaos["fontFamily"] = "Comic Sans MS, Comic Sans, cursive"
+            has_command = True
+
+        if "wobble" in text:
+            chaos["animation"] = "wobble"
+            has_command = True
+
+        if "rainbow" in text:
+            chaos["animation"] = "rainbow"
+            has_command = True
+
+        if "matrix mode" in text:
+            chaos["theme"] = "matrix"
+            has_command = True
+
+    if has_command:
+        spec["chaos"] = chaos
+    return spec
+
+
 # ── Non-streaming endpoint (kept for backward compatibility) ──
 
 @router.post("/api/query", response_model=QueryResponse)
@@ -200,6 +262,11 @@ async def handle_query(request: QueryRequest) -> QueryResponse:
         hydrated_spec,
         assistant_message=assistant_message,
         chaos_fallback=current_chaos,
+    )
+    hydrated_spec = _apply_chaos_commands_from_text(
+        request.message,
+        hydrated_spec,
+        current_chaos,
     )
     if user_id:
         chaos = hydrated_spec.get("chaos")
@@ -260,6 +327,11 @@ async def handle_query_stream(request: QueryRequest) -> StreamingResponse:
                         hydrated_spec,
                         assistant_message=data.get("assistantMessage", "") if isinstance(data, dict) else "",
                         chaos_fallback=current_chaos,
+                    )
+                    hydrated_spec = _apply_chaos_commands_from_text(
+                        request.message,
+                        hydrated_spec,
+                        current_chaos,
                     )
                     if user_id:
                         chaos = hydrated_spec.get("chaos")
@@ -354,6 +426,11 @@ async def handle_query_epic_stream(request: QueryRequest) -> StreamingResponse:
                         hydrated_spec,
                         assistant_message=payload.get("assistantMessage", ""),
                         chaos_fallback=current_chaos,
+                    )
+                    hydrated_spec = _apply_chaos_commands_from_text(
+                        request.message,
+                        hydrated_spec,
+                        current_chaos,
                     )
                     if user_id:
                         chaos = hydrated_spec.get("chaos")

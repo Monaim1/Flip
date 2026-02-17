@@ -113,6 +113,13 @@ export const useAgent = (): AgentHelpers => {
 		}).catch(() => undefined);
 	}, [currentChaos, userId]);
 
+	useEffect(() => {
+		setUiState((prev) => ({
+			...prev,
+			chaosOverride: { ...(prev.chaosOverride ?? {}), ...currentChaos },
+		}));
+	}, [currentChaos]);
+
 	const updateAssistantText = useCallback((messageId: string, text: string, isStreaming: boolean) => {
 		setMessages((prev) =>
 			prev.map((m) =>
@@ -224,7 +231,13 @@ export const useAgent = (): AgentHelpers => {
 				}
 				const data = await response.json();
 				if (data?.dashboardSpec?.chaos) {
-					setCurrentChaos((prev) => ({ ...prev, ...data.dashboardSpec.chaos }));
+					const nextChaos = data.dashboardSpec.chaos as Partial<ChaosState>;
+					setCurrentChaos((prev) => ({ ...prev, ...nextChaos }));
+					setUiState((prev) => ({
+						...prev,
+						mode: 'analysis',
+						chaosOverride: { ...(prev.chaosOverride ?? {}), ...nextChaos },
+					}));
 				}
 				const fallbackText =
 					(data.assistantMessage && data.assistantMessage.trim()) ||
@@ -246,12 +259,22 @@ export const useAgent = (): AgentHelpers => {
 						signal: abortRef.current?.signal,
 					});
 
-				let response = await connectStream(`${API_URL}/api/query/epic-stream`);
-				if (!response.ok || !response.body) {
-					response = await connectStream(`${API_URL}/api/query/stream`);
+				let response: Response | null = null;
+				try {
+					response = await connectStream(`${API_URL}/api/query/epic-stream`);
+				} catch {
+					response = null;
 				}
 
-				if (!response.ok || !response.body) {
+				if (!response || !response.ok || !response.body) {
+					try {
+						response = await connectStream(`${API_URL}/api/query/stream`);
+					} catch {
+						response = null;
+					}
+				}
+
+				if (!response || !response.ok || !response.body) {
 					throw new Error('Failed to connect to stream');
 				}
 
@@ -292,7 +315,13 @@ export const useAgent = (): AgentHelpers => {
 						} else if (currentEvent === 'result') {
 							gotResult = true;
 							if (data?.dashboardSpec?.chaos) {
-								setCurrentChaos((prev) => ({ ...prev, ...data.dashboardSpec.chaos }));
+								const nextChaos = data.dashboardSpec.chaos as Partial<ChaosState>;
+								setCurrentChaos((prev) => ({ ...prev, ...nextChaos }));
+								setUiState((prev) => ({
+									...prev,
+									mode: 'analysis',
+									chaosOverride: { ...(prev.chaosOverride ?? {}), ...nextChaos },
+								}));
 							}
 							const finalMessage =
 								(data.assistantMessage && data.assistantMessage.trim()) ||

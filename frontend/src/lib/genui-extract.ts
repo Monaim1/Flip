@@ -40,6 +40,7 @@ const findJsonObject = (text: string): ParseResult | null => {
 
 	if (startIndices.length === 0 || endIndices.length === 0) return null;
 
+	let fallback: ParseResult | null = null;
 	for (const start of startIndices) {
 		for (let j = endIndices.length - 1; j >= 0; j--) {
 			const end = endIndices[j];
@@ -47,12 +48,18 @@ const findJsonObject = (text: string): ParseResult | null => {
 			const snippet = text.slice(start, end + 1);
 			const parsed = tryParseJson(snippet);
 			if (parsed) {
-				return { obj: parsed, start, end };
+				const candidate = { obj: parsed, start, end };
+				if ('dashboardSpec' in parsed) {
+					return candidate;
+				}
+				if (!fallback) {
+					fallback = candidate;
+				}
 			}
 		}
 	}
 
-	return null;
+	return fallback;
 };
 
 export const extractDashboardSpecFromText = (raw: string): ExtractedDashboard | null => {
@@ -62,8 +69,6 @@ export const extractDashboardSpecFromText = (raw: string): ExtractedDashboard | 
 
 	const specCandidate = found.obj.dashboardSpec;
 	const normalized = normalizeDashboardSpec(specCandidate);
-	if (!normalized) return null;
-
 	const extractedAssistant =
 		typeof found.obj.assistantMessage === 'string' ? found.obj.assistantMessage : '';
 	const trimmedAssistant = extractedAssistant.trim();
@@ -71,6 +76,13 @@ export const extractDashboardSpecFromText = (raw: string): ExtractedDashboard | 
 		trimmedAssistant.length > 0
 			? extractedAssistant
 			: raw.slice(0, found.start).trim() || raw.slice(found.end + 1).trim();
+
+	if (!normalized) {
+		return {
+			spec: { blocks: [] },
+			assistantText: assistantMessage,
+		};
+	}
 
 	return { spec: normalized, assistantText: assistantMessage };
 };

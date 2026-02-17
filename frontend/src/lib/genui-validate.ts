@@ -117,7 +117,36 @@ export const validateDashboardSpec = (spec: unknown): ValidationResult => {
 };
 
 export const normalizeDashboardSpec = (spec: unknown): DashboardSpec | null => {
-	const result = validateDashboardSpec(spec);
-	if (!result.valid) return null;
-	return spec as DashboardSpec;
+	if (spec == null || typeof spec !== 'object') {
+		return null;
+	}
+
+	const s = spec as Record<string, unknown>;
+	const rawBlocks = Array.isArray(s.blocks) ? s.blocks : [];
+	const normalizedBlocks: Block[] = [];
+
+	for (let i = 0; i < rawBlocks.length; i++) {
+		const raw = rawBlocks[i];
+		if (!isObject(raw)) {
+			continue;
+		}
+		const type = raw.type;
+		if (!isNonEmptyString(type) || !KNOWN_BLOCK_TYPES.has(type)) {
+			continue;
+		}
+
+		const props =
+			isObject(raw.props)
+				? raw.props
+				: Object.fromEntries(
+						Object.entries(raw).filter(([key]) => key !== 'type' && key !== 'props'),
+					);
+		normalizedBlocks.push({ type, props });
+	}
+
+	const chaos = isObject(s.chaos) ? s.chaos : undefined;
+	return {
+		blocks: normalizedBlocks,
+		...(chaos ? { chaos } : {}),
+	};
 };

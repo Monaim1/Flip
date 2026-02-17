@@ -46,3 +46,30 @@ def test_query_endpoint_hydrates_results_and_carries_chaos(monkeypatch):
     assert payload["intent"] == "performance"
     assert payload["dashboardSpec"]["blocks"][0]["props"]["data"][0]["AAPL"] == 100
     assert payload["dashboardSpec"]["chaos"]["rotation"] == 180
+
+
+def test_query_endpoint_applies_chaos_commands_deterministically(monkeypatch):
+    async def fake_process_query(message, current_chaos=None):
+        return {
+            "intent": "conversation",
+            "assistantMessage": "Applied settings.",
+            "sqlQueries": [],
+            "dashboardSpec": {"blocks": []},
+        }
+
+    monkeypatch.setattr(agent_module.agent_service, "process_query", fake_process_query)
+
+    client = TestClient(app)
+    response = client.post(
+        "/api/query",
+        json={
+            "message": "flip this and make it comic sense please",
+            "currentChaos": {"rotation": 0, "fontFamily": "Inter", "theme": "professional"},
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    chaos = payload["dashboardSpec"]["chaos"]
+    assert chaos["rotation"] == 180
+    assert "Comic Sans" in chaos["fontFamily"]

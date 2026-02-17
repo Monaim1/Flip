@@ -62,14 +62,14 @@ def set_chaos_state(user_id: str, chaos: Dict[str, Any]) -> None:
                 # If existing JSON is malformed, overwrite with fresh value below.
                 pass
 
+    if existing:
+        db_service.execute(
+            "UPDATE ui_preferences SET chaos_json = ? WHERE user_id = ?",
+            [chaos_json, user_id],
+        )
+        return
+
     db_service.execute(
-        """
-        INSERT INTO ui_preferences (user_id, chaos_json, updated_at)
-        VALUES (?, ?, CURRENT_TIMESTAMP)
-        ON CONFLICT (user_id) DO UPDATE
-        SET
-            chaos_json = excluded.chaos_json,
-            updated_at = CURRENT_TIMESTAMP
-        """.strip(),
+        "INSERT INTO ui_preferences (user_id, chaos_json) VALUES (?, ?)",
         [user_id, chaos_json],
     )
